@@ -34,21 +34,27 @@ folder layout:
 
 ## Requirements
 
-- A **Windows** machine holding your files, reachable over:
-  - **SMB** (for the app to read, list and stream files), and
-  - **PowerShell remoting / WinRM** (for the app to move, rename and delete files - this is what
-    makes a "move" instant: it's a same-volume rename on the server, not a copy through the app).
-- A **non-admin domain or local account** dedicated to the app (don't use your own login - see
-  below for the exact permissions it needs).
 - A [StashDB](https://stashdb.org) account (or an account on a self-hosted
   [stash-box](https://github.com/stashapp/stash-box) instance - anything speaking the same GraphQL
   API works, just point `stash_base` at it).
-- Docker + Docker Compose on whatever host will run the container (does not need to be Windows).
+- Docker + Docker Compose on whatever host will run the container.
+- Somewhere to put your files, using **one of two storage backends** (`STORAGE_BACKEND` /
+  Settings > Library - pick whichever matches your setup):
 
-This app **does not** work with a Linux/Samba-only server, an SMB share with no WinRM behind it, or
-NFS - the executor talks to the file server over PowerShell remoting to do the actual moves.
+  - **`local`** - the simplest option for most people. Bind-mount your downloads folder and your
+    library folder straight into the container (`docker-compose.yml`'s `volumes:`) - a local path
+    on the Docker host, an NFS mount, a Synology/TrueNAS/Unraid share mounted at the OS level,
+    anything your host can see. No SMB, no WinRM: the app just uses plain filesystem calls. A move
+    is instant if both folders are on the same underlying filesystem/mount; if they're two separate
+    mounts, it falls back to a copy + delete automatically (works either way, just slower for that
+    case).
+  - **`smb_winrm`** - this project's own original setup: a separate **Windows** machine, reachable
+    over **SMB** (for the app to read, list and stream files) *and* **PowerShell remoting / WinRM**
+    (for the app to move, rename and delete files - this is what makes a move instant, a
+    same-volume rename on the server, never a copy through the app). Needs a non-admin account
+    dedicated to the app - see below for the exact permissions it needs.
 
-### Setting up the file server account
+### Setting up the file server account (smb_winrm backend only)
 
 On the Windows machine holding your files (adjust group/share names for your setup), as an
 administrator:
@@ -71,25 +77,47 @@ works around this itself (it always uses the `\\?\` long-path prefix on the serv
 don't need to change it, but it's worth knowing about if you ever script against the same share
 yourself.
 
+### Setting up local / bind-mounted storage (local backend only)
+
+Point `docker-compose.yml`'s `volumes:` at your own folders and set `SRC_ROOT`/`DST_ROOT` to match
+where they land inside the container:
+
+```yaml
+services:
+  video-sorter:
+    volumes:
+      - video-sorter-data:/data
+      - /mnt/downloads:/incoming   # a local path, an NFS mount, a Synology/TrueNAS/Unraid share
+      - /mnt/library:/library      #   mounted at the OS level - anything your Docker host can see
+    environment:
+      STORAGE_BACKEND: "local"
+      SRC_ROOT: "/incoming"
+      DST_ROOT: "/library"
+```
+
+If `/mnt/downloads` and `/mnt/library` are two separate filesystems/mounts, a move between them
+falls back to copying the bytes (still correct, just not instant) - put them on the same
+filesystem if you want every move to be an instant rename.
+
 ## Quick start
 
 ```bash
 git clone <this repo> video-sorter && cd video-sorter
 cp docker-compose.yml docker-compose.yml.bak  # optional, before you edit it
-$EDITOR docker-compose.yml   # set UI_PASSWORD, SMB_HOST, SRC_SHARE, DST_SHARE, SRC_ROOT, DST_ROOT
+$EDITOR docker-compose.yml   # set UI_PASSWORD and one of the two storage backend blocks
 docker compose up -d --build
 ```
 
 Then open `http://<host>:8770`, log in with `UI_PASSWORD`, and go to **Settings**:
 
-1. **Credentials** - enter the login for the account you set up above, and your StashDB login. Each
-   is tested before it's saved.
-2. **Library setup** - double-check the file server address, share names and local paths match what
-   you set up (or finish setting them here instead of in `docker-compose.yml` - either works, and
-   this page's values always win). Turn off "organize into per-studio subfolders" if you'd rather
-   everything land in one flat library folder.
+1. **Credentials** - for the `smb_winrm` backend, enter the login for the account you set up above,
+   and your StashDB login (each is tested before it's saved). For `local`, there's just StashDB.
+2. **Library setup** - pick your storage backend at the top if you didn't already in
+   `docker-compose.yml`, and double-check the address/share names/paths match what you set up (or
+   finish setting them here instead - either works, and this page's values always win). Turn off
+   "organize into per-studio subfolders" if you'd rather everything land in one flat library folder.
 
-Once both are green on the **Connections** card, go to the **Sort** tab and click **Scan &
+Once everything is green on the **Connections** card, go to the **Sort** tab and click **Scan &
 identify**.
 
 ## Configuration reference
@@ -101,11 +129,12 @@ next scan; a changed file server address takes effect after a restart.
 
 | Setting | Env var | Default | Meaning |
 |---|---|---|---|
-| File server address | `SMB_HOST` | `10.10.0.11` | hostname or IP of the Windows machine |
-| Source share | `SRC_SHARE` | `xtosort$` | where new downloads land, unsorted |
-| Library share | `DST_SHARE` | `xsites$` | the sorted result |
-| Source local path | `SRC_ROOT` | `H:\xToSort$` | `SRC_SHARE`'s path on the file server itself (PowerShell remoting needs this, since it operates on the server's own filesystem, not the UNC path) |
-| Library local path | `DST_ROOT` | `H:\XSites$` | `DST_SHARE`'s local path |
+| Storage backend | `STORAGE_BACKEND` | `smb_winrm` | `smb_winrm` (a Windows file server) or `local` (bind-mounted paths, no SMB/WinRM) |
+| File server address | `SMB_HOST` | `10.10.0.11` | `smb_winrm` only: hostname or IP of the Windows machine |
+| Source share | `SRC_SHARE` | `xtosort$` | where new downloads land, unsorted (an SMB share name, or - `local` - just a label) |
+| Library share | `DST_SHARE` | `xsites$` | the sorted result (same) |
+| Source local path | `SRC_ROOT` | `H:\xToSort$` | `smb_winrm`: `SRC_SHARE`'s path on the file server itself (PowerShell remoting operates on the server's own filesystem, not the UNC path). `local`: the path *inside this container* where you bind-mounted it, e.g. `/incoming` |
+| Library local path | `DST_ROOT` | `H:\XSites$` | the same, for `DST_SHARE` |
 | Organize by studio | `ORGANIZE_BY_STUDIO` | `1` | `0`: skip per-studio subfolders, everything goes straight into the library share |
 | Dupes folder | `DUPES_DIR` | `_dupes` | inside the source share: duplicates set aside for you to review/delete |
 | Review folder | `REVIEW_DIR` | `_To Sort` | inside the library share: unidentified files (only if you turn that on) and "keep both" picks |
@@ -143,7 +172,8 @@ left in as illustrations rather than because they're broadly useful:
 app/            FastAPI server + the single-page UI (ui.html)
 sorter/         the sorting/matching engine, run as short-lived subprocesses by the app
   config.py       the file-server layout described above (env var + /data/library.json)
-  smbio.py        read-only SMB (walk, hash)
+  storage.py      the storage backend abstraction (smb_winrm vs local) - everything else uses this
+  smbio.py        SMB session/path plumbing for storage.py's "smb_winrm" backend
   stash.py        StashDB GraphQL client, on-disk cache
   parse.py        filename -> (site, date, title, ...)
   names.py        the standardized-name builder

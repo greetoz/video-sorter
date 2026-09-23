@@ -6,18 +6,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(__file__))
-import smbio
+import storage
 
 CACHE = os.path.join(os.path.dirname(__file__), "..", "cache")
 share = sys.argv[1]
 threads = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 tag = share.strip("$")
 
-smbio.connect()
+storage.connect()
 t0 = time.time()
-inv = smbio.walk(share)
+inv = storage.walk(share)
 json.dump(inv, open(f"{CACHE}/inv_{tag}.json", "w"))
-vids = [e for e in inv if not e.get("dir") and "error" not in e and smbio.is_video(e["path"])]
+vids = [e for e in inv if not e.get("dir") and "error" not in e and storage.is_video(e["path"])]
 print(f"{share}: {len(inv)} entries, {len(vids)} videos, walk {time.time()-t0:.0f}s", flush=True)
 
 hpath = f"{CACHE}/hash_{tag}.json"
@@ -28,7 +28,7 @@ print(f"{len(todo)} to hash", flush=True)
 
 def work(e):
     try:
-        return e["path"], [e["size"], smbio.oshash(share, e["path"], e["size"])]
+        return e["path"], [e["size"], storage.oshash(share, e["path"], e["size"])]
     except Exception as ex:
         return e["path"], [e["size"], None, str(ex)[:80]]
 

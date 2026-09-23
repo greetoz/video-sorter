@@ -16,11 +16,16 @@ DATA = os.environ.get("DATA_DIR", "/data")
 FILE = os.environ.get("LIBRARY_FILE", f"{DATA}/library.json")
 
 DEFAULTS = {
-    "smb_host": "10.10.0.11",
-    "src_share": "xtosort$",           # where new downloads land, unsorted
-    "dst_share": "xsites$",            # the sorted library
-    "src_root": r"H:\xToSort$",        # src_share's local path on the file server (PowerShell remoting needs this)
-    "dst_root": r"H:\XSites$",
+    "storage_backend": "smb_winrm",    # "smb_winrm": a Windows file server, read over SMB, written to over PowerShell remoting (this
+                                       #   project's own reference setup - moves are instant same-volume renames on the server).
+                                       # "local": src_root/dst_root are paths bind-mounted straight into this container (any NFS/CIFS/
+                                       #   local-disk/... mount your Docker host can see) - no SMB or WinRM at all, just filesystem calls.
+    "smb_host": "10.10.0.11",         # storage_backend "smb_winrm" only
+    "src_share": "xtosort$",           # where new downloads land, unsorted (an SMB share name, or - "local" backend - just a label)
+    "dst_share": "xsites$",            # the sorted library (same)
+    "src_root": r"H:\xToSort$",        # "smb_winrm": src_share's path on the file server itself, for PowerShell remoting
+                                       # "local": src_share's path inside *this* container, e.g. /incoming
+    "dst_root": r"H:\XSites$",         # the same, for dst_share
     "dupes_dir": "_dupes",             # inside src_share: duplicates set aside for you to review/delete on the Duplicates tab
     "review_dir": "_To Sort",          # inside dst_share: unidentified files (only if turned on) and "keep both" picks
     "movies_dir": "_Movie_Scenes",     # inside dst_share: movie rips / scenes with no studio match
@@ -28,6 +33,7 @@ DEFAULTS = {
     "stash_base": "https://stashdb.org",  # a self-hosted stash-box instance works too, if that's what you use
 }
 ENV = {  # settings key -> environment variable a docker-compose-only deployment can set instead of using the UI
+    "storage_backend": "STORAGE_BACKEND",
     "smb_host": "SMB_HOST", "src_share": "SRC_SHARE", "dst_share": "DST_SHARE", "src_root": "SRC_ROOT", "dst_root": "DST_ROOT",
     "dupes_dir": "DUPES_DIR", "review_dir": "REVIEW_DIR", "movies_dir": "MOVIES_DIR",
     "organize_by_studio": "ORGANIZE_BY_STUDIO", "stash_base": "STASH_BASE",
@@ -80,6 +86,7 @@ def tag(share):
 
 # module-level constants, for the sorter scripts: each runs once as its own subprocess, so these can never go stale
 _cfg = get()
+STORAGE_BACKEND = _cfg["storage_backend"]
 HOST = _cfg["smb_host"]
 SRC_SHARE, DST_SHARE = _cfg["src_share"], _cfg["dst_share"]
 SRC_ROOT, DST_ROOT = _cfg["src_root"], _cfg["dst_root"]

@@ -11,20 +11,36 @@ def timed(fn):
         return {"ok": False, "detail": f"{type(ex).__name__}: {str(ex)[:160]}", "ms": int((time.time() - t) * 1000)}
 
 
-def smb():
+def storage_access():
+    """Both shares are reachable and listable - works the same for "smb_winrm" and "local"."""
     import config
-    import smbclient
-    import smbio
-    smbio.connect()
+    import storage
+    storage.connect()
     cfg = config.get()
     out = []
     for share in (cfg["src_share"], cfg["dst_share"]):
-        n = sum(1 for _ in smbclient.scandir(smbio.unc(share)))
+        n = sum(1 for _ in storage.scandir(storage.locator(share)))
         out.append(f"{share}: {n} top-level entries")
     return "; ".join(out)
 
 
+def local_write_access():
+    """storage_backend "local" only: both mounted roots exist and this process can write to them."""
+    import config
+    import os
+    cfg = config.get()
+    out = []
+    for label, root in (("source", cfg["src_root"]), ("library", cfg["dst_root"])):
+        if not os.path.isdir(root):
+            raise RuntimeError(f"{label} path {root!r} does not exist or is not a directory")
+        if not os.access(root, os.W_OK):
+            raise RuntimeError(f"{label} path {root!r} is not writable by this container")
+        out.append(f"{label}: {root} (writable)")
+    return "; ".join(out)
+
+
 def psrp():
+    """storage_backend "smb_winrm" only: the PowerShell remoting session the executor uses for moves/deletes."""
     import execute
     c = execute.client()
     out, streams, had = c.execute_ps("$env:COMPUTERNAME + ' / PowerShell ' + $PSVersionTable.PSVersion + ' / ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name")
@@ -43,12 +59,14 @@ def test_login(kind, user, password):
         if kind == "smb":
             import config
             import smbclient
-            import smbio
+            import storage
             cfg = config.get()
+            if cfg["storage_backend"] == "local":
+                return False, "not used with the \"local\" storage backend - there is no file server login"
             smbclient.reset_connection_cache()
             try:
                 smbclient.register_session(cfg["smb_host"], username=user, password=password, connection_timeout=15)
-                n = sum(1 for _ in smbclient.scandir(smbio.unc(cfg["src_share"])))
+                n = sum(1 for _ in storage.scandir(storage.locator(cfg["src_share"])))
             finally:
                 smbclient.reset_connection_cache()  # the next real connect() registers the stored credentials
             return True, f"logged in as {user}; {cfg['src_share']} has {n} top-level entries"
@@ -65,4 +83,7 @@ def test_login(kind, user, password):
 
 
 def all_checks():
-    return {"SMB file access": timed(smb), "PowerShell remoting": timed(psrp), "StashDB": timed(stashdb)}
+    import config
+    if config.get()["storage_backend"] == "local":
+        return {"Storage access": timed(storage_access), "Storage write access": timed(local_write_access), "StashDB": timed(stashdb)}
+    return {"SMB file access": timed(storage_access), "PowerShell remoting": timed(psrp), "StashDB": timed(stashdb)}

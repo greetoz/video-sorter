@@ -1,6 +1,6 @@
-# Everything under "your file server" and "how the library is organized" can also be left at their placeholder
-# values here and set later from the app's own Settings > Library page instead (saved into the /data volume,
-# so it survives redeploys and does not need docker compose up again) - whichever you find more convenient.
+# Everything under "storage backend" can also be left at these placeholder values here and set later from the
+# app's own Settings > Library page instead (saved into the /data volume, so it survives redeploys and does not
+# need docker compose up again) - whichever you find more convenient. Pick ONE of the two backends below.
 services:
   video-sorter:
     build:
@@ -12,25 +12,41 @@ services:
       - "8770:8000"
     volumes:
       - video-sorter-data:/data
+      # --- only for STORAGE_BACKEND=local: bind-mount your own folders here, then point SRC_ROOT/DST_ROOT at
+      # them below. Anything your Docker host can mount works - a local path, NFS, a Synology/TrueNAS/Unraid
+      # share mounted at the OS level, etc. Leave these two lines out entirely for STORAGE_BACKEND=smb_winrm.
+      # - /path/on/the/host/downloads:/incoming
+      # - /path/on/the/host/library:/library
     environment:
       # --- required ---------------------------------------------------------
       # the password for the web UI (there is only one account)
       UI_PASSWORD: "change-me"
 
-      # --- your file server ---------------------------------------------------
-      # a Windows machine reachable over SMB *and* PowerShell remoting (WinRM, non-admin NTLM):
-      # PowerShell remoting is what actually moves/deletes files (instant, same-volume renames);
-      # SMB is only used to read/list/stream. See the README for how to set the account up.
+      # --- storage backend: pick one --------------------------------------------
+      STORAGE_BACKEND: "smb_winrm"   # or "local" - see the two blocks below
+
+      # === smb_winrm: a Windows machine reachable over SMB *and* PowerShell remoting (WinRM, non-admin NTLM). ===
+      # PowerShell remoting is what actually moves/deletes files (instant, same-volume renames); SMB is only
+      # used to read/list/stream. See the README for how to set the account up. Ignored for STORAGE_BACKEND=local.
       SMB_HOST: "10.0.0.5"
       SRC_SHARE: "downloads$"      # where new downloads land, unsorted
       DST_SHARE: "library$"        # the sorted library
-      SRC_ROOT: 'H:\Downloads$'    # SRC_SHARE's local path on that same machine
+      SRC_ROOT: 'H:\Downloads$'    # SRC_SHARE's local path on that same Windows machine
       DST_ROOT: 'H:\Library$'      # DST_SHARE's local path
       # optional: log in with these on first start instead of typing them into Settings > Credentials
       # SMB_USER: "DOMAIN\\someuser"
       # SMB_PASS: ""
 
-      # --- optional: how the library is organized -----------------------------
+      # === local: paths bind-mounted straight into this container (see the volumes: lines above). No SMB, ===
+      # no WinRM - moves/deletes are plain filesystem calls in this process. Uncomment these and comment out
+      # the smb_winrm block above (SRC_ROOT/DST_ROOT do double duty as the mount points, so only set one pair):
+      # STORAGE_BACKEND: "local"
+      # SRC_SHARE: "downloads"       # just a label with this backend - used in cache file names and the UI
+      # DST_SHARE: "library"
+      # SRC_ROOT: "/incoming"        # must match the bind mount above
+      # DST_ROOT: "/library"
+
+      # --- optional: how the library is organized (either backend) -------------
       # DUPES_DIR: "_dupes"            # inside SRC_SHARE: duplicates set aside for you to review/delete
       # REVIEW_DIR: "_To Sort"         # inside DST_SHARE: unidentified files (only if turned on) + "keep both" picks
       # MOVIES_DIR: "_Movie_Scenes"    # inside DST_SHARE: movie rips / scenes with no studio match

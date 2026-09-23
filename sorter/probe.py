@@ -5,13 +5,12 @@ import threading
 import time
 
 import av
-import smbclient
 
-import smbio
+import storage
 
 CACHE = os.path.join(os.path.dirname(__file__), "..", "cache", "probe.json")
 _cache = json.load(open(CACHE)) if os.path.exists(CACHE) else {}
-_gate = threading.Semaphore(2)  # PyAV holds many reads open; more than ~2 concurrent exhausts SMB credits
+_gate = threading.Semaphore(2)  # PyAV holds many reads open; more than ~2 concurrent exhausts SMB credits (harmless throttle for "local" too)
 
 
 def save():
@@ -22,7 +21,7 @@ def _probe_once(share, rel):
     res = {"height": None, "width": None, "duration": None, "codec": None}
     try:
         with _gate:
-            with smbclient.open_file(smbio.unc(share, rel), mode="rb", buffering=1 << 20) as f:
+            with storage.open_file(storage.locator(share, rel), mode="rb", buffering=1 << 20) as f:
                 with av.open(f, mode="r", options={"analyzeduration": "0", "probesize": "1000000"}) as c:
                     v = next((s for s in c.streams if s.type == "video"), None)
                     if v:

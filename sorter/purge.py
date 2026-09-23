@@ -123,10 +123,9 @@ if __name__ == "__main__":
 def frame_sigs(share, rel, dur, fracs=(0.15, 0.5, 0.85)):
     """dHash (64 bit) of the frame at ~fraction*duration for each fraction."""
     import av
-    import smbclient
-    import smbio
+    import storage
     sigs = []
-    with smbclient.open_file(smbio.unc(share, rel), mode="rb", buffering=1 << 20) as f:
+    with storage.open_file(storage.locator(share, rel), mode="rb", buffering=1 << 20) as f:
         with av.open(f) as c:
             v = c.streams.video[0]
             v.thread_type = "AUTO"
@@ -146,7 +145,6 @@ def frame_sigs(share, rel, dur, fracs=(0.15, 0.5, 0.85)):
 
 def verify_tier2(rec):
     import probe
-    import smbio
     d = probe.probe(rec["dupe"][0], rec["dupe"][1], rec["dupe_size"])
     k = probe.probe(rec["keep"][0], rec["keep"][1], rec["keep_size"])
     if d.get("error") or k.get("error") or not d.get("duration") or not k.get("duration"):
@@ -169,8 +167,8 @@ def verify_tier2(rec):
 
 def run_verify(only_tier2=False):
     import execute
-    import smbio
-    smbio.connect()  # tier 2 probes read frames over SMB and need a registered session
+    import storage
+    storage.connect()  # tier 2 probes read frames and need a registered session (a no-op for the "local" backend)
     items = json.load(open(f"{OUT}/items.json"))
     verdicts = json.load(open(f"{OUT}/verdicts.json")) if os.path.exists(f"{OUT}/verdicts.json") else {}
     c = execute.client()
@@ -385,10 +383,9 @@ def run_restore_names():
     """Give the files in _dupes their original file names back (taken from the move logs of every run). Same-folder renames, never overwrite;
     the renames are written to a run of their own so that the duplicate list keeps following the files."""
     import execute
-    import smbclient
-    import smbio
-    smbio.connect()
-    present = {e.name.lower(): e for e in smbclient.scandir(smbio.unc(SRC_SHARE, DUPES_DIR)) if not e.is_dir()}
+    import storage
+    storage.connect()
+    present = {e.name.lower(): e for e in storage.scandir(storage.locator(SRC_SHARE, DUPES_DIR)) if not e.is_dir()}
     wanted = []  # (current name, original name)
     for d in run_dirs():
         for line in open(f"{d}/exec_log.jsonl"):

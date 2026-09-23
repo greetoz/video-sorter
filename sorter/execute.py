@@ -1,5 +1,7 @@
-"""Executor: turns manifest.json into ordered operations and runs them ON the file server via PowerShell remoting
-(pypsrp, non-admin, NTLM). Same-volume renames, never overwrites, verifies every step, resumable via a local JSONL log.
+"""Executor: turns manifest.json into ordered operations and runs them either on the file server via PowerShell
+remoting (pypsrp, non-admin, NTLM - storage_backend "smb_winrm") or directly in this process against bind-mounted
+paths (storage_backend "local", see _run_local below). Same-volume renames, never overwrites, verifies every step,
+resumable via a local JSONL log.
 
 Usage:  execute.py dry            validate every operation on the server, change nothing
         execute.py pilot          execute only the pilot subset (manifest/pilot.json), then verify
@@ -7,16 +9,19 @@ Usage:  execute.py dry            validate every operation on the server, change
 """
 import base64
 import collections
+import errno
+import hashlib
 import json
 import os
 import random
+import shutil
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 from pypsrp.client import Client
 
-from config import DST_SHARE, DUPES_DIR, HOST, REVIEW_DIR, SRC_ROOT, SRC_SHARE, SRC_TAG, DST_ROOT, DST_TAG
+from config import DST_SHARE, DUPES_DIR, HOST, REVIEW_DIR, SRC_ROOT, SRC_SHARE, SRC_TAG, STORAGE_BACKEND, DST_ROOT, DST_TAG
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 MAN = f"{ROOT}/{os.environ.get('MAN_DIR', 'manifest')}"
@@ -239,15 +244,152 @@ def pick_pilot(ops, rows, S):
 
 
 def client():
+    if STORAGE_BACKEND == "local":
+        return None  # _run_local operates on this process's own bind-mounted paths; nothing to connect to
     return Client(HOST, username=os.environ["SMB_USER"], password=os.environ["SMB_PASS"], ssl=False, port=5985, auth="ntlm", cert_validation=False)
 
 
 def run_batch(c, mode, ops, planned):
+    if STORAGE_BACKEND == "local":
+        return _run_local(mode, ops, planned)
     payload = base64.b64encode(json.dumps({"ops": ops, "planned": planned, "roots": ROOTS}).encode()).decode()
     out, streams, had = c.execute_ps(f"$mode='{mode}'\n$b64='{payload}'\n{PS}")
     if streams.error:
         raise RuntimeError(str(streams.error[0])[:300])
     return json.loads(out)
+
+
+# ---------------------------------------------------------------- "local" backend: the same ops, run directly in this
+# process against bind-mounted paths instead of shipped to a Windows file server over PowerShell remoting. Mirrors the
+# PS script above operation-for-operation (never overwrite, verify size before/after, refuse if keep_path is missing).
+def _local_path(share, rel=""):
+    root = ROOTS[share]
+    return os.path.join(root, rel.replace("\\", "/")) if rel else root
+
+
+def _join_rel(folder, name):
+    return f"{folder}\\{name}" if folder else name
+
+
+def _rename_or_copy(src, dst):
+    """Same filesystem (the common case, one bind mount): an instant rename. Different filesystems (src_root and
+    dst_root are two separate mounts): fall back to a copy + delete - still correct, just not instant."""
+    try:
+        os.rename(src, dst)
+    except OSError as ex:
+        if ex.errno != errno.EXDEV:
+            raise
+        shutil.copy2(src, dst)
+        os.remove(src)
+
+
+def _sampled_compare(a, b):
+    """Same 48-sampled-point MD5 compare as the PS script's 'compare' op, so tier-1 verification behaves identically
+    on both backends."""
+    la, lb = os.path.getsize(a), os.path.getsize(b)
+    if la != lb:
+        return False, "size differs"
+    n = 48
+    m1, m2 = hashlib.md5(), hashlib.md5()
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        for k in range(n):
+            off = 0 if la <= 65536 else (la - 65536) * k // (n - 1)
+            fa.seek(off)
+            fb.seek(off)
+            m1.update(fa.read(65536))
+            m2.update(fb.read(65536))
+    return (True, "identical at 48 sampled points") if m1.digest() == m2.digest() else (False, "DIFFERENT content")
+
+
+def _run_local(mode, ops, planned):
+    planned_set = set(planned)
+    out = []
+    for op in ops:
+        t0 = time.time()
+        ok, msg = False, ""
+        try:
+            if op["type"] == "mkdir":
+                d = _local_path(op["share"], op["rel"])
+                if os.path.isdir(d):
+                    ok, msg = True, "exists"
+                elif mode == "exec":
+                    os.makedirs(d, exist_ok=True)
+                    ok, msg = os.path.isdir(d), "created"
+                else:
+                    ok, msg = True, "would create"
+            elif op["type"] == "move":
+                src = _local_path(op["sshare"], op["spath"])
+                dst = _local_path(op["dshare"], _join_rel(op["dfolder"], op["dname"]))
+                parent = _local_path(op["dshare"], op["dfolder"])
+                if not os.path.isfile(src):
+                    raise RuntimeError("source missing")
+                length = os.path.getsize(src)
+                if length != int(op["size"]):
+                    raise RuntimeError(f"size mismatch: {length} vs {op['size']}")
+                if os.path.exists(dst):
+                    raise RuntimeError("destination exists")
+                if op.get("keep_path"):
+                    k = _local_path(op["keep_share"], op["keep_path"])
+                    if not os.path.isfile(k):
+                        raise RuntimeError("file to keep is missing - refusing to move duplicate")
+                pok = os.path.isdir(parent) or (mode == "dry" and f"{op['dshare']}|{op['dfolder']}" in planned_set)
+                if not pok:
+                    raise RuntimeError("destination folder missing")
+                if mode == "exec":
+                    _rename_or_copy(src, dst)
+                    if os.path.exists(src) or not os.path.isfile(dst):
+                        raise RuntimeError("post-check failed")
+                    if os.path.getsize(dst) != length:
+                        raise RuntimeError("post-check size differs")
+                    msg = "moved"
+                else:
+                    msg = "ok"
+                ok = True
+            elif op["type"] == "compare":
+                a = _local_path(op["ashare"], op["apath"])
+                b = _local_path(op["bshare"], op["bpath"])
+                if not os.path.isfile(a) or not os.path.isfile(b):
+                    raise RuntimeError("file missing")
+                ok, msg = _sampled_compare(a, b)
+            elif op["type"] == "delete":
+                f = _local_path(op["share"], op["path"])
+                if not os.path.isfile(f):
+                    raise RuntimeError("file missing")
+                if os.path.getsize(f) != int(op["size"]):
+                    raise RuntimeError("size mismatch")
+                if op.get("keep_path"):
+                    k = _local_path(op["keep_share"], op["keep_path"])
+                    if not os.path.isfile(k):
+                        raise RuntimeError("file to keep is missing - refusing to delete")
+                    if op.get("keep_size") and os.path.getsize(k) != int(op["keep_size"]):
+                        raise RuntimeError("kept file size changed - refusing to delete")
+                if mode == "exec":
+                    os.remove(f)
+                    if os.path.exists(f):
+                        raise RuntimeError("still exists")
+                    msg = "deleted"
+                else:
+                    msg = "ok"
+                ok = True
+            elif op["type"] == "rmdir":
+                d = _local_path(op["share"], op["path"])
+                if not os.path.isdir(d):
+                    ok, msg = True, "gone"
+                else:
+                    n = len(os.listdir(d))
+                    if n > 0:
+                        msg = f"skip: not empty ({n})"
+                    elif mode == "exec":
+                        os.rmdir(d)
+                        ok, msg = not os.path.isdir(d), "removed"
+                    else:
+                        ok, msg = True, "ok (empty)"
+            else:
+                raise RuntimeError(f"unknown op type {op['type']!r}")
+        except Exception as ex:
+            ok, msg = False, str(ex)
+        out.append({"id": op["id"], "ok": ok, "msg": msg, "ms": int((time.time() - t0) * 1000)})
+    return out
 
 
 def main():

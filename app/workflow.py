@@ -233,20 +233,19 @@ def dupes_media(request: Request, id: str, which: str, convert: int = 0, start: 
     convert=1 converts on the fly (for WMV/MPEG/AVI...) starting `start` seconds in; otherwise the file is served as it is, with range support."""
     if which not in ("dupe", "keep"):
         raise HTTPException(status_code=404)
-    import smbclient
-    import smbio
-    smbio.connect()
+    import storage
+    storage.connect()
     share, path = _item(id)[which]
-    unc = smbio.unc(share, path)
+    loc = storage.locator(share, path)
     if convert:
-        media.release([unc])  # a reseek/drift-correction on this same side abandons its old stream client-side without telling the server;
+        media.release([loc])  # a reseek/drift-correction on this same side abandons its old stream client-side without telling the server;
         # drop it first so its conversion slot is freed before we try to take one, instead of leaking until the 15 min idle reaper gets to it
-        gen = media.convert_stream(unc, max(0.0, min(start, 86400.0)))
+        gen = media.convert_stream(loc, max(0.0, min(start, 86400.0)))
         if gen is None:
             raise HTTPException(status_code=503, detail="two conversions are already running - close another comparison first")
         return StreamingResponse(gen, media_type="video/mp4", headers={"Cache-Control": "no-store", "Accept-Ranges": "none"})
     try:
-        size = smbclient.stat(unc).st_size
+        size = storage.stat(loc).st_size
     except Exception:
         raise HTTPException(status_code=404, detail="that file no longer exists")
     try:
@@ -256,7 +255,7 @@ def dupes_media(request: Request, id: str, which: str, convert: int = 0, start: 
     headers = {"Accept-Ranges": "bytes", "Content-Length": str(last - first + 1), "Cache-Control": "private, max-age=600"}
     if status == 206:
         headers["Content-Range"] = f"bytes {first}-{last}/{size}"
-    return StreamingResponse(media.range_stream(unc, first, last), status_code=status, headers=headers,
+    return StreamingResponse(media.range_stream(loc, first, last), status_code=status, headers=headers,
                              media_type=media.MIME.get(os.path.splitext(path)[1].lower(), "application/octet-stream"))
 
 
@@ -276,14 +275,15 @@ class ReleaseReq(BaseModel):
 
 @router.post("/dupes/release", **post)
 def dupes_release(body: ReleaseReq):
-    """The player left this pair: close the app's open streams of both files so nothing keeps them locked on the share."""
-    import smbio
+    """The player left this pair: close the app's open streams of both files so nothing keeps them locked."""
+    import storage
     it = _item(body.id)
-    return {"closed": media.release([smbio.unc(*it["dupe"]), smbio.unc(*it["keep"])])}
+    return {"closed": media.release([storage.locator(*it["dupe"]), storage.locator(*it["keep"])])}
 
 
 # ------------------------------------------------------------------ library setup (paths, shares, folder names)
 class LibrarySettings(BaseModel):
+    storage_backend: str
     smb_host: str
     src_share: str
     dst_share: str
@@ -309,8 +309,12 @@ def library_get():
 
 @router.post("/library", **post)
 def library_save(body: LibrarySettings):
+    if body.storage_backend not in ("smb_winrm", "local"):
+        raise HTTPException(status_code=400, detail="storage_backend must be 'smb_winrm' or 'local'")
     fields = body.model_dump(exclude={"actress_dirs"})
     for k, v in fields.items():
+        if k == "smb_host" and body.storage_backend == "local":
+            continue  # not used with this backend
         if isinstance(v, str) and not v.strip():
             raise HTTPException(status_code=400, detail=f"{k} cannot be empty")
     actress_map = {}
@@ -320,17 +324,22 @@ def library_save(body: LibrarySettings):
             if k and v:
                 actress_map[k] = v
     warning = None
-    try:
-        import smbclient
-        smbclient.reset_connection_cache()
+    if body.storage_backend == "local":
+        missing = [label for label, root in (("source", fields["src_root"]), ("library", fields["dst_root"])) if not os.path.isdir(root)]
+        if missing:
+            warning = f"saved, but this container cannot see a directory at: {', '.join(missing)} - check it's bind-mounted in docker-compose.yml"
+    else:
         try:
-            smbclient.register_session(fields["smb_host"], username=os.environ.get("SMB_USER", ""), password=os.environ.get("SMB_PASS", ""), connection_timeout=10)
-            for share in (fields["src_share"], fields["dst_share"]):
-                next(iter(smbclient.scandir(f"\\\\{fields['smb_host']}\\{share}")), None)
-        finally:
+            import smbclient
             smbclient.reset_connection_cache()
-    except Exception as ex:
-        warning = f"saved, but could not confirm the shares are reachable yet ({type(ex).__name__}: {str(ex)[:140]}) - check the file server credentials below"
+            try:
+                smbclient.register_session(fields["smb_host"], username=os.environ.get("SMB_USER", ""), password=os.environ.get("SMB_PASS", ""), connection_timeout=10)
+                for share in (fields["src_share"], fields["dst_share"]):
+                    next(iter(smbclient.scandir(f"\\\\{fields['smb_host']}\\{share}")), None)
+            finally:
+                smbclient.reset_connection_cache()
+        except Exception as ex:
+            warning = f"saved, but could not confirm the shares are reachable yet ({type(ex).__name__}: {str(ex)[:140]}) - check the file server credentials below"
     libcfg.save(fields, actress_map)
     return dict(_library_overview(), warning=warning)
 
@@ -421,8 +430,8 @@ def dupes_decide(body: Decide):
     it = _item(body.id)
     if it["tier"].startswith("MISSING"):
         raise HTTPException(status_code=409, detail="one of the two files no longer exists")
-    import smbio
-    media.release([smbio.unc(*it["dupe"]), smbio.unc(*it["keep"])])  # close the app's own streams of these files before moving/deleting them
+    import storage
+    media.release([storage.locator(*it["dupe"]), storage.locator(*it["keep"])])  # close the app's own streams of these files before moving/deleting them
     label = {"keep": "Delete the duplicate, keep the kept copy", "dupe": "Keep the duplicate, delete the kept copy", "both": "Not a duplicate: keep both"}[body.keep]
     return _start("decide-dupe", [(label, [f"{SORTER}/purge.py", "decide", body.id, body.keep])], env=PURGE)
 

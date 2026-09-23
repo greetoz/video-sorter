@@ -1,5 +1,6 @@
-"""Streams a video from the file server to the browser: as it is (with HTTP range support), or converted on the fly to a small
-H.264/AAC fragmented MP4 for formats a browser cannot decode (WMV, MPEG-1, old MPEG-4 AVI, ...)."""
+"""Streams a video to the browser: as it is (with HTTP range support), or converted on the fly to a small H.264/AAC
+fragmented MP4 for formats a browser cannot decode (WMV, MPEG-1, old MPEG-4 AVI, ...). Works the same for either
+storage backend - reads go through storage.open_file(), never smbclient directly."""
 import os
 import queue
 import re
@@ -17,10 +18,10 @@ _slots = threading.BoundedSemaphore(2)  # converting is CPU heavy: at most two s
 
 class _Stream:
     """One open stream of a file. The app can close its file handle from outside, because a browser that drops the connection leaves the
-    generator suspended and Python may take a long time to clean it up, which keeps the file locked on the share (moves and deletes fail)."""
+    generator suspended and Python may take a long time to clean it up, which keeps the file locked (moves and deletes fail)."""
 
-    def __init__(self, unc):
-        self.unc, self.ev, self.closers, self.t = unc, threading.Event(), [], time.time()
+    def __init__(self, loc):
+        self.loc, self.ev, self.closers, self.t = loc, threading.Event(), [], time.time()
 
     def close(self):
         self.ev.set()
@@ -36,8 +37,8 @@ _streams_lock = threading.Lock()
 IDLE_CLOSE = 900  # seconds: a stream nobody has read from for 15 minutes is abandoned
 
 
-def _open_stream(unc):
-    st = _Stream(unc)
+def _open_stream(loc):
+    st = _Stream(loc)
     with _streams_lock:
         _streams.add(st)
     return st
@@ -48,23 +49,23 @@ def _drop(st):
         _streams.discard(st)
 
 
-def release(uncs, wait=5.0):
+def release(locs, wait=5.0):
     """Close every stream that reads one of these files, right now. Called before a file is moved or deleted, and when the player leaves a pair."""
-    want = {u.lower() for u in uncs}
+    want = {u.lower() for u in locs}
     with _streams_lock:
-        hit = [st for st in _streams if st.unc.lower() in want]
+        hit = [st for st in _streams if st.loc.lower() in want]
     for st in hit:
         st.close()
         _drop(st)
     if hit:
-        time.sleep(0.4)  # let the SMB close settle before the caller moves or deletes
+        time.sleep(0.4)  # let the close settle before the caller moves or deletes
     return bool(hit)
 
 
 def release_all(wait=5.0):
     with _streams_lock:
-        uncs = [st.unc for st in _streams]
-    return release(uncs, wait)
+        locs = [st.loc for st in _streams]
+    return release(locs, wait)
 
 
 def _reaper():
@@ -102,13 +103,13 @@ def parse_range(header, size):
     return 206, start, end
 
 
-def range_stream(unc, start, end, chunk=1 << 20):
-    import smbclient
-    st = _open_stream(unc)
+def range_stream(loc, start, end, chunk=1 << 20):
+    import storage
+    st = _open_stream(loc)
     f = None
     try:
-        # share_access: a browser fetches several ranges of one file at once, and the file may be open elsewhere (a second stream, a player)
-        f = smbclient.open_file(unc, mode="rb", buffering=chunk, share_access="rw")
+        # writable=True: a browser fetches several ranges of one file at once, and the file may be open elsewhere (a second stream, a player)
+        f = storage.open_file(loc, mode="rb", buffering=chunk, writable=True)
         st.closers.append(f.close)
         f.seek(start)
         left = end - start + 1
@@ -152,10 +153,10 @@ class _Sink:
         pass
 
 
-def _convert(unc, start, sink, stop, max_h, st):
+def _convert(loc, start, sink, stop, max_h, st):
     import av
-    import smbclient
-    with smbclient.open_file(unc, mode="rb", buffering=1 << 20, share_access="rw") as f, av.open(f) as src:
+    import storage
+    with storage.open_file(loc, mode="rb", buffering=1 << 20, writable=True) as f, av.open(f) as src:
         st.closers.append(f.close)
         vs = next(s for s in src.streams if s.type == "video")
         aud = next((s for s in src.streams if s.type == "audio"), None)
@@ -209,19 +210,19 @@ def _convert(unc, start, sink, stop, max_h, st):
         out.close()
 
 
-def convert_stream(unc, start=0.0, max_h=720):
+def convert_stream(loc, start=0.0, max_h=720):
     """Generator of fragmented-MP4 bytes; the position is 'start' seconds into the source. Returns None if both slots are busy."""
     if not _slots.acquire(blocking=False):
         return None
-    st = _open_stream(unc)
+    st = _open_stream(loc)
     q, stop, done = queue.Queue(maxsize=24), st.ev, object()
 
     def run():
         try:
-            _convert(unc, float(start), _Sink(q, stop), stop, max_h, st)
+            _convert(loc, float(start), _Sink(q, stop), stop, max_h, st)
         except Exception as ex:
             if not stop.is_set():
-                print(f"convert failed for {unc}: {ex!r}", file=sys.stderr, flush=True)
+                print(f"convert failed for {loc}: {ex!r}", file=sys.stderr, flush=True)
         finally:
             _drop(st)
             _slots.release()  # here, not in the generator: an abandoned generator would never give the slot back

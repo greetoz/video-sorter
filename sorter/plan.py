@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(__file__))
 import analvids
 import probe
-import smbio
+import storage
 from config import ACTRESS_DIRS, DST_SHARE, DST_TAG, DUPES_DIR, MOVIES_DIR, ORGANIZE_BY_STUDIO, REVIEW_DIR, SRC_SHARE, SRC_TAG
 from names import MAX_NAME, append_name, build_name, norm, sanitize
 from parse import camel_split, parse
@@ -31,11 +31,11 @@ DUPES, TOSORT, MOVIES = DUPES_DIR, REVIEW_DIR, MOVIES_DIR
 STOP = {"and", "the", "xxx", "of", "in", "to", "with", "for", "her", "his", "a", "an", "on", "at", "is", "s"}
 load = lambda n: json.load(open(f"{C}/{n}"))
 inv_t, inv_s, h_t, h_s = load(f"inv_{SRC_TAG}.json"), load(f"inv_{DST_TAG}.json"), load(f"hash_{SRC_TAG}.json"), load(f"hash_{DST_TAG}.json")
-smbio.connect()
+storage.connect()
 st = Stash()
 
 # ---------------------------------------------------------------- destination folders
-vids_s = [e for e in inv_s if not e.get("dir") and "error" not in e and smbio.is_video(e["path"])]
+vids_s = [e for e in inv_s if not e.get("dir") and "error" not in e and storage.is_video(e["path"])]
 folder_count = collections.Counter(e["path"].split("\\")[0] for e in vids_s if "\\" in e["path"])
 all_folders = {e["path"] for e in inv_s if e.get("dir") and "\\" not in e["path"]}
 fmap = {}
@@ -183,7 +183,7 @@ def text_match(info, actress, dur):
 # ---------------------------------------------------------------- collect + identify videos from the source share
 items = []
 for e in inv_t:
-    if e.get("dir") or "error" in e or not smbio.is_video(e["path"]):
+    if e.get("dir") or "error" in e or not storage.is_video(e["path"]):
         continue
     if e["path"].split("\\")[0].lower() == DUPES.lower():
         continue  # already sorted out as a duplicate; reviewed/deleted from the Duplicates page
@@ -456,7 +456,7 @@ for sid, files in ([] if ONLY else ms_scene.items()):
 src_names = {r["src"]: r for r in rows}
 funs, deletes, archives = [], [], []
 for e in inv_t:
-    if e.get("dir") or "error" in e or smbio.is_video(e["path"]):
+    if e.get("dir") or "error" in e or storage.is_video(e["path"]):
         continue
     if ONLY and e["path"].split("\\")[0] not in only_tops:
         continue
