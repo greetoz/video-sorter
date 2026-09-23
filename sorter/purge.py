@@ -1,4 +1,4 @@
-"""Re-verify every file in xtosort$\\_dupes against its kept copy, then (only when certain) delete it.
+"""Re-verify every file in the source share's dupes folder against its kept copy, then (only when certain) delete it.
 Stages:  purge.py analyze   -> tiers + counts (read-only)
          purge.py verify    -> server-side byte compare (tier 1) + probe/frame compare (tier 2), writes manifest_r3/verdicts.json (read-only)
          purge.py delete    -> delete files with verdict CERTAIN (keeps a log)"""
@@ -10,6 +10,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
+from config import DST_SHARE, DUPES_DIR, REVIEW_DIR, SRC_SHARE, SRC_TAG, DST_TAG
+
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 C = f"{ROOT}/cache"
 OUT = f"{ROOT}/{os.environ.get('PURGE_DIR', 'manifest_r3')}"
@@ -46,9 +48,9 @@ def load_state():
         _absorb_log(f"{d}/exec_log.jsonl", moved, dir_renamed)
     for h in sorted(glob.glob(HIST)):
         _absorb_log(h, moved, dir_renamed)
-    inv = {"xtosort$": {low(e["path"]): e for e in json.load(open(f"{C}/inv_xtosort.json")) if not e.get("dir") and "error" not in e},
-           "xsites$": {low(e["path"]): e for e in json.load(open(f"{C}/inv_xsites.json")) if not e.get("dir") and "error" not in e}}
-    hashes = {"xtosort$": json.load(open(f"{C}/hash_xtosort.json")), "xsites$": json.load(open(f"{C}/hash_xsites.json"))}
+    inv = {SRC_SHARE: {low(e["path"]): e for e in json.load(open(f"{C}/inv_{SRC_TAG}.json")) if not e.get("dir") and "error" not in e},
+           DST_SHARE: {low(e["path"]): e for e in json.load(open(f"{C}/inv_{DST_TAG}.json")) if not e.get("dir") and "error" not in e}}
+    hashes = {SRC_SHARE: json.load(open(f"{C}/hash_{SRC_TAG}.json")), DST_SHARE: json.load(open(f"{C}/hash_{DST_TAG}.json"))}
     fp = json.load(open(f"{C}/stash_fp.json"))
     return ops, moved, dir_renamed, inv, hashes, fp
 
@@ -77,10 +79,10 @@ def build():
         if o["phase"] == "3-dupe":
             keep0 = (o["keep_share"], o["keep_path"])
         elif o["phase"] == "2-replace":
-            keep0 = ("xtosort$", o["note"].split("replaced by better quality ", 1)[1])
+            keep0 = (SRC_SHARE, o["note"].split("replaced by better quality ", 1)[1])
         else:
             continue
-        dupe = final_loc(moved, dir_renamed, "xtosort$", "_dupes\\" + o["dname"])  # follows later renames (restore-names)
+        dupe = final_loc(moved, dir_renamed, SRC_SHARE, DUPES_DIR + "\\" + o["dname"])  # follows later renames (restore-names)
         keep = final_loc(moved, dir_renamed, *keep0)
         rec = {"id": o["id"], "phase": o["phase"], "dupe": dupe, "keep": keep, "orig": (o["sshare"], o["spath"])}
         de, ke = inv[dupe[0]].get(low(dupe[1])), inv[keep[0]].get(low(keep[1]))
@@ -179,8 +181,8 @@ def run_verify(only_tier2=False):
             ops = [{"id": i["id"], "type": "compare", "ashare": i["dupe"][0], "apath": i["dupe"][1], "bshare": i["keep"][0], "bpath": i["keep"][1]} for i in batch]
             res = execute.run_batch(c, "dry", ops, [])
             for i, r in zip(batch, res):
-                keep_in_dupes = i["keep"][1].lower().startswith("_dupes\\")
-                verdicts[i["id"]] = ("CERTAIN", r["msg"]) if (r["ok"] and not keep_in_dupes) else ("REVIEW", r["msg"] + (" (kept copy is itself in _dupes)" if keep_in_dupes else ""))
+                keep_in_dupes = i["keep"][1].lower().startswith(DUPES_DIR.lower() + "\\")
+                verdicts[i["id"]] = ("CERTAIN", r["msg"]) if (r["ok"] and not keep_in_dupes) else ("REVIEW", r["msg"] + (f" (kept copy is itself in {DUPES_DIR})" if keep_in_dupes else ""))
             json.dump(verdicts, open(f"{OUT}/verdicts.json", "w"))
             print(f"  tier1 {min(n + 100, len(t1))}/{len(t1)}", flush=True)
     t2 = [i for i in items if i["tier"] in ("2-same-scene", "3-review") and i["id"] not in verdicts]
@@ -227,8 +229,8 @@ def run_delete(request_path, dry=False):
             why = i["tier"].lower() + " (nothing to delete or nothing to keep)"
         elif v[0] not in ("CERTAIN", "DECIDED") and not req.get("include_review"):  # DECIDED = the user picked the loser in the compare player
             why = f"verdict {v[0]}: {v[1][:80]}"
-        elif low(kpath).startswith("_dupes\\") or (kshare, low(kpath)) in doomed:
-            why = "the kept copy is itself in _dupes or also selected for deletion"
+        elif low(kpath).startswith(DUPES_DIR.lower() + "\\") or (kshare, low(kpath)) in doomed:
+            why = f"the kept copy is itself in {DUPES_DIR} or also selected for deletion"
         else:
             ops.append({"id": i["id"], "type": "delete", "share": i["dupe"][0], "path": i["dupe"][1], "size": i["dupe_size"],
                         "keep_share": kshare, "keep_path": kpath, "keep_size": i["keep_size"], "verdict": v[0]})
@@ -274,11 +276,11 @@ if __name__ == "__main__" and sys.argv[1] == "delete":
 def _patch_inventory(gone=None, renamed=None):
     """Keep the cached inventories in step with what was just done, so the lists are right without a 60 s rescan."""
     if gone:
-        p = f"{C}/inv_xtosort.json"
+        p = f"{C}/inv_{SRC_TAG}.json"
         json.dump([e for e in json.load(open(p)) if e["path"].lower() != gone.lower()], open(p, "w"))
     if renamed:
         old, new, size = renamed
-        p = f"{C}/inv_xsites.json"
+        p = f"{C}/inv_{DST_TAG}.json"
         inv = json.load(open(p))
         for e in inv:
             if e["path"].lower() == old.lower():
@@ -298,8 +300,8 @@ def run_decide(item_id, keep_which):
     if it is None or it["tier"].startswith("MISSING"):
         sys.exit("FAIL: nothing to decide - one of the two files is already gone")
     (dshare, dpath), (kshare, kpath) = it["dupe"], it["keep"]
-    if low(kpath).startswith("_dupes\\"):
-        sys.exit("FAIL: the kept copy is itself in _dupes")
+    if low(kpath).startswith(DUPES_DIR.lower() + "\\"):
+        sys.exit(f"FAIL: the kept copy is itself in {DUPES_DIR}")
     c = execute.client()
 
     def mv(sshare, spath, size, dshare_, dfolder, dname):  # one server-side move (size-checked, never overwrites), retried while a viewer still holds the file
@@ -314,26 +316,26 @@ def run_decide(item_id, keep_which):
     old_verdict = verdicts.get(item_id, ["UNVERIFIED", ""])
     dsize, ksize = it["dupe_size"], it["keep_size"]
     if keep_which == "both":
-        # not a duplicate after all: keep both. The file leaves _dupes for the library's holding folder, where unidentified files go.
-        execute.run_batch(c, "exec", [{"id": item_id, "type": "mkdir", "share": "xsites$", "rel": "_To Sort"}], [])
+        # not a duplicate after all: keep both. The file leaves the dupes folder for the library's holding folder, where unidentified files go.
+        execute.run_batch(c, "exec", [{"id": item_id, "type": "mkdir", "share": DST_SHARE, "rel": REVIEW_DIR}], [])
         name = dpath.rsplit("\\", 1)[-1]
         final = name
         for n in range(2, 9):
-            r = mv(dshare, dpath, dsize, "xsites$", "_To Sort", final)
+            r = mv(dshare, dpath, dsize, DST_SHARE, REVIEW_DIR, final)
             if r["ok"] or "destination exists" not in r["msg"]:
                 break
             b, e = os.path.splitext(name)
             final = f"{b} ({n}){e}"
         if not r["ok"]:
             sys.exit(f"FAIL: {r['msg']} - nothing changed")
-        verdicts[item_id] = ["NOT_DUPE", f"you marked it as a different video (was {old_verdict[0]}: {old_verdict[1][:60]}); moved to _To Sort"]
+        verdicts[item_id] = ["NOT_DUPE", f"you marked it as a different video (was {old_verdict[0]}: {old_verdict[1][:60]}); moved to {REVIEW_DIR}"]
         it["tier"] = "MISSING_DUPE"
         json.dump(items, open(f"{OUT}/items.json", "w"))
         json.dump(verdicts, open(f"{OUT}/verdicts.json", "w"))
         _patch_inventory(gone=dpath)
         with open(f"{OUT}/decide_log.jsonl", "a") as log:
-            log.write(json.dumps({"id": item_id, "action": "not-a-duplicate", "from": [dshare, dpath], "to": ["xsites$", f"_To Sort\\{final}"], "t": int(time.time())}) + "\n")
-        print(f"kept both: {name} moved to xsites$\\_To Sort\\{final}", flush=True)
+            log.write(json.dumps({"id": item_id, "action": "not-a-duplicate", "from": [dshare, dpath], "to": [DST_SHARE, f"{REVIEW_DIR}\\{final}"], "t": int(time.time())}) + "\n")
+        print(f"kept both: {name} moved to {DST_SHARE}\\{REVIEW_DIR}\\{final}", flush=True)
         return
     if keep_which == "dupe":
         if "\\" not in kpath:
@@ -345,21 +347,21 @@ def run_decide(item_id, keep_which):
         if not r["ok"]:
             sys.exit(f"FAIL step 1/3 (duplicate into the library): {r['msg']} - nothing changed")
         oname, r = kname, None
-        for n in range(2, 9):  # a free name in _dupes for the old kept copy
-            r = mv(kshare, kpath, ksize, dshare, "_dupes", oname)
+        for n in range(2, 9):  # a free name in the dupes folder for the old kept copy
+            r = mv(kshare, kpath, ksize, dshare, DUPES_DIR, oname)
             if r["ok"] or "destination exists" not in r["msg"]:
                 break
             b, e = os.path.splitext(kname)
             oname = f"{b} ({n}){e}"
         if not r["ok"]:
-            rb = mv(kshare, f"{kdir}\\{tmp}", dsize, dshare, "_dupes", dname)
-            sys.exit(f"FAIL step 2/3 (old kept copy to _dupes): {r['msg']} - " + ("rolled back, nothing changed" if rb["ok"] else f"ROLLBACK FAILED ({rb['msg']}); the duplicate is at {kshare}\\{kdir}\\{tmp}"))
+            rb = mv(kshare, f"{kdir}\\{tmp}", dsize, dshare, DUPES_DIR, dname)
+            sys.exit(f"FAIL step 2/3 (old kept copy to {DUPES_DIR}): {r['msg']} - " + ("rolled back, nothing changed" if rb["ok"] else f"ROLLBACK FAILED ({rb['msg']}); the duplicate is at {kshare}\\{kdir}\\{tmp}"))
         r = mv(kshare, f"{kdir}\\{tmp}", dsize, kshare, kdir, final)
         if not r["ok"]:
-            sys.exit(f"FAIL step 3/3 (final name): {r['msg']} - the file you kept is in the library as {kshare}\\{kdir}\\{tmp}; the old copy is in _dupes\\{oname}")
-        it["dupe"], it["dupe_size"], it["keep"], it["keep_size"] = [dshare, f"_dupes\\{oname}"], ksize, [kshare, f"{kdir}\\{final}"], dsize
+            sys.exit(f"FAIL step 3/3 (final name): {r['msg']} - the file you kept is in the library as {kshare}\\{kdir}\\{tmp}; the old copy is in {DUPES_DIR}\\{oname}")
+        it["dupe"], it["dupe_size"], it["keep"], it["keep_size"] = [dshare, f"{DUPES_DIR}\\{oname}"], ksize, [kshare, f"{kdir}\\{final}"], dsize
         _patch_inventory(renamed=(kpath, f"{kdir}\\{final}", dsize))
-        print(f"swapped: {final} is now in the library at {kdir}; the old copy is in _dupes\\{oname}", flush=True)
+        print(f"swapped: {final} is now in the library at {kdir}; the old copy is in {DUPES_DIR}\\{oname}", flush=True)
     verdicts[item_id] = ["DECIDED", old_verdict[1] if old_verdict[0] == "DECIDED" else f"you chose which file to keep (was {old_verdict[0]}: {old_verdict[1][:60]})"]
     json.dump(items, open(f"{OUT}/items.json", "w"))
     json.dump(verdicts, open(f"{OUT}/verdicts.json", "w"))
@@ -386,12 +388,12 @@ def run_restore_names():
     import smbclient
     import smbio
     smbio.connect()
-    present = {e.name.lower(): e for e in smbclient.scandir(smbio.unc("xtosort$", "_dupes")) if not e.is_dir()}
+    present = {e.name.lower(): e for e in smbclient.scandir(smbio.unc(SRC_SHARE, DUPES_DIR)) if not e.is_dir()}
     wanted = []  # (current name, original name)
     for d in run_dirs():
         for line in open(f"{d}/exec_log.jsonl"):
             j = json.loads(line)
-            if j["mode"] == "exec" and j["ok"] and j["type"] == "move" and j["dshare"] == "xtosort$" and j["dfolder"] == "_dupes" and j["sshare"] == "xtosort$":
+            if j["mode"] == "exec" and j["ok"] and j["type"] == "move" and j["dshare"] == SRC_SHARE and j["dfolder"] == DUPES_DIR and j["sshare"] == SRC_SHARE:
                 orig = j["spath"].rsplit("\\", 1)[-1]
                 if orig != j["dname"]:
                     wanted.append((j["dname"], orig))
@@ -411,7 +413,7 @@ def run_restore_names():
                 n += 1
                 b, x = os.path.splitext(orig)
                 target = f"{b} ({n}){x}"
-            op = {"id": "r", "type": "move", "sshare": "xtosort$", "spath": f"_dupes\\{cur}", "size": e.stat().st_size, "dshare": "xtosort$", "dfolder": "_dupes", "dname": target}
+            op = {"id": "r", "type": "move", "sshare": SRC_SHARE, "spath": f"{DUPES_DIR}\\{cur}", "size": e.stat().st_size, "dshare": SRC_SHARE, "dfolder": DUPES_DIR, "dname": target}
             for _ in range(5):
                 r = execute.run_batch(c, "exec", [op], [])[0]
                 if r["ok"] or "another process" not in r["msg"]:

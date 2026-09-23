@@ -10,6 +10,7 @@ import time
 
 import requests
 
+import config as libcfg
 from app import state
 
 DIR = f"{state.DATA}/banner"
@@ -225,7 +226,7 @@ def _refresh(force):
 
 
 def _video_counts(names):
-    p = f"{state.CACHE}/inv_xsites.json"
+    p = f"{state.CACHE}/inv_{libcfg.tag(libcfg.get()['dst_share'])}.json"
     if not os.path.exists(p):
         return {}
     key = (os.path.getmtime(p), tuple(names))

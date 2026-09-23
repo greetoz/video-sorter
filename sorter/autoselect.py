@@ -1,10 +1,13 @@
-"""Applies the automatic-run policy to a plan: which rows are confident enough to run unattended, which stay in xtosort$ for review.
+"""Applies the automatic-run policy to a plan: which rows are confident enough to run unattended, which stay in the source share for review.
 Reads $MAN_DIR/manifest.json and the policy from $SCHEDULE_FILE, writes $MAN_DIR/exclude.json (what to leave alone) and auto_summary.json.
 Nothing is moved here; execute.py honours exclude.json."""
 import collections
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+from config import MOVIES_DIR, REVIEW_DIR
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 
@@ -14,7 +17,7 @@ DEFAULT_POLICY = {
     "samples": True,        # sample clips of movie rips are deleted
     "junk": True,           # leftover images/nfo/txt files are deleted, once the videos in their folder are all handled
     "archives": False,      # .rar/.zip files are deleted (off: they may still contain videos)
-    "unidentified": False,  # unidentified files are moved to _To Sort (off: they stay in xtosort$ for you)
+    "unidentified": False,  # unidentified files are moved to review_dir (off: they stay in the source share for you)
     "limit": 200,           # safety valve: if a run would handle more files than this, it does nothing and asks for a look
 }
 BAD_NOTES = ("DATE MISMATCH", "UNVERIFIED", "PATH TOO LONG", "name collision", "fuzzy match")
@@ -44,9 +47,9 @@ def decide_rows(rows, replace_existing, policy):
             folder, conf = r["dest_folder"], r["conf"]
             if r["src"] in replacing:
                 ok, why = False, "would replace a file already in the library"
-            elif folder == "_Movie_Scenes":
+            elif folder == MOVIES_DIR:
                 ok, why = False, "a movie scene"
-            elif folder == "_To Sort":
+            elif folder == REVIEW_DIR:
                 ok, why = policy["unidentified"], "unidentified" + ("" if policy["unidentified"] else " - not identified by content, stays for review")
             elif conf == "high":
                 ok, why = True, "matched by content fingerprint"

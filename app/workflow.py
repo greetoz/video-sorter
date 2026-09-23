@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+import config as libcfg
+
 from app import banner, jobs, media, scheduler, state
 from app.security import auth, same_origin
 
@@ -43,10 +45,11 @@ def cancel():
 
 # ------------------------------------------------------------------ sort
 def _inbox():
-    inv = state.read_json(f"{state.CACHE}/inv_xtosort.json", [])
+    cfg = libcfg.get()
+    p = f"{state.CACHE}/inv_{libcfg.tag(cfg['src_share'])}.json"
+    inv = state.read_json(p, [])
     vids = [e for e in inv if not e.get("dir") and "error" not in e and os.path.splitext(e["path"])[1].lower() in (".mp4", ".mkv", ".avi", ".wmv", ".mov", ".m4v", ".ts", ".flv", ".mpg", ".mpeg", ".webm", ".vid")
-            and e["path"].split("\\")[0].lower() != "_dupes"]
-    p = f"{state.CACHE}/inv_xtosort.json"
+            and e["path"].split("\\")[0].lower() != cfg["dupes_dir"].lower()]
     return {"videos": len(vids), "bytes": sum(e["size"] for e in vids), "scanned": int(os.path.getmtime(p)) if os.path.exists(p) else None}
 
 
@@ -55,6 +58,7 @@ def sort_overview():
     rid = state.current_run()
     out = {"inbox": _inbox(), "run": rid, "plan": None}
     if rid and os.path.exists(state.run_path(rid, "manifest.json")):
+        cfg = libcfg.get()
         m = state.read_json(state.run_path(rid, "manifest.json"))
         S, rows = m["summary"], m["rows"]
         st = state.run_state(rid)
@@ -64,7 +68,7 @@ def sort_overview():
             "planned": st.get("planned"), "actions": dict(collections.Counter(r["action"] for r in rows)),
             "conf": dict(collections.Counter(r["conf"] for r in rows)), "new_folders": len(S.get("new_folders", [])),
             "funscripts": len(S.get("funscripts", [])), "deletes": len(S.get("deletes", [])), "replace_existing": len(S.get("replace_existing", [])),
-            "unidentified": sum(1 for r in rows if r["action"] == "MOVE" and r["dest_folder"] in ("_To Sort", "_Movie_Scenes")),
+            "unidentified": sum(1 for r in rows if r["action"] == "MOVE" and r["dest_folder"] in (cfg["review_dir"], cfg["movies_dir"])),
             "excluded": len(excl), "dry": dry, "dry_current": bool(dry and dry.get("sig") == state.plan_signature(rid)), "executed": st.get("executed"), "exec_failed": st.get("exec_failed"),
         }
     return out
@@ -82,15 +86,18 @@ def sort_rows():
 @router.post("/sort/scan", **post)
 def scan():
     """Refresh both inventories and the oshash / StashDB fingerprint caches (incremental, read-only)."""
-    steps = [(f"Inventory + hash {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in ("xtosort$", "xsites$")]
-    steps += [(f"Look up {s} on StashDB", [f"{SORTER}/lookup_fp.py", s]) for s in ("xtosort$", "xsites$")]
+    shares = (libcfg.get()["src_share"], libcfg.get()["dst_share"])
+    steps = [(f"Inventory + hash {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in shares]
+    steps += [(f"Look up {s} on StashDB", [f"{SORTER}/lookup_fp.py", s]) for s in shares]
     return _start("scan", steps)
 
 
 @router.post("/sort/plan", **post)
 def plan():
-    """Identify every video in xtosort$ and decide where it goes. Read-only; starts a new run."""
-    if not all(os.path.exists(f"{state.CACHE}/{f}") for f in ("inv_xtosort.json", "inv_xsites.json", "hash_xtosort.json", "hash_xsites.json")):
+    """Identify every video in the source share and decide where it goes. Read-only; starts a new run."""
+    cfg = libcfg.get()
+    src_tag, dst_tag = libcfg.tag(cfg["src_share"]), libcfg.tag(cfg["dst_share"])
+    if not all(os.path.exists(f"{state.CACHE}/{f}") for f in (f"inv_{src_tag}.json", f"inv_{dst_tag}.json", f"hash_{src_tag}.json", f"hash_{dst_tag}.json")):
         raise HTTPException(status_code=409, detail="scan first - there is no inventory yet")
     if jobs.status().get("status") in ("running", "cancelling"):
         raise HTTPException(status_code=409, detail="another job is still running")
@@ -150,7 +157,7 @@ def execute():
     if dry["failures"]:
         raise HTTPException(status_code=409, detail=f"the validation had {dry['failures']} failures - fix or skip those rows first")
     steps = [("Move, rename and clean up", [f"{SORTER}/execute.py", "full"])]
-    steps += [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in ("xtosort$", "xsites$")]
+    steps += [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in (libcfg.get()["src_share"], libcfg.get()["dst_share"])]
     return _start("execute", steps, env={"MAN_DIR": f"manifest/runs/{rid}"}, on_done=_finish("full", rid))
 
 
@@ -160,14 +167,16 @@ PURGE = {"PURGE_DIR": "manifest/dupes"}
 
 @router.post("/dupes/verify", **post)
 def dupes_verify():
-    """Re-check every file in _dupes against the copy that was kept (byte compare on the server, then frame comparison)."""
-    steps = [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in ("xtosort$", "xsites$")]
+    """Re-check every file in the dupes folder against the copy that was kept (byte compare on the server, then frame comparison)."""
+    steps = [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in (libcfg.get()["src_share"], libcfg.get()["dst_share"])]
     steps += [("List duplicates", [f"{SORTER}/purge.py", "analyze"]), ("Verify duplicates", [f"{SORTER}/purge.py", "verify"])]
     return _start("verify-dupes", steps, env=PURGE)
 
 
 @router.get("/dupes")
 def dupes():
+    cfg = libcfg.get()
+    dupes_prefix = cfg["dupes_dir"] + "\\"
     items = state.read_json(f"{state.DUPES}/items.json", [])
     verdicts = state.read_json(f"{state.DUPES}/verdicts.json", {})
     rows, count, size = [], collections.Counter(), collections.Counter()
@@ -179,12 +188,12 @@ def dupes():
         verdict = v[0] if v else "UNVERIFIED"
         count[verdict] += 1
         size[verdict] += i["dupe_size"] or 0
-        rows.append({"id": i["id"], "verdict": verdict, "reason": v[1] if v else "not verified yet", "dupe": i["dupe"][1].replace("_dupes\\", "", 1), "keep": i["keep"][1], "keep_share": i["keep"][0],
+        rows.append({"id": i["id"], "verdict": verdict, "reason": v[1] if v else "not verified yet", "dupe": i["dupe"][1].replace(dupes_prefix, "", 1), "keep": i["keep"][1], "keep_share": i["keep"][0],
                      "dupe_size": i["dupe_size"], "keep_size": i["keep_size"]})
     tracked = {i["dupe"][1].lower() for i in items}
-    for e in state.read_json(f"{state.CACHE}/inv_xtosort.json", []):
+    for e in state.read_json(f"{state.CACHE}/inv_{libcfg.tag(cfg['src_share'])}.json", []):
         p = e["path"]
-        if e.get("dir") or "error" in e or not p.lower().startswith("_dupes\\") or p.lower() in tracked:
+        if e.get("dir") or "error" in e or not p.lower().startswith(dupes_prefix.lower()) or p.lower() in tracked:
             continue
         count["OTHER"] += 1
         rows.append({"id": None, "verdict": "OTHER", "reason": "not one of the tracked duplicates (for example a funscript that followed its video) - nothing is done with it", "dupe": p.split("\\", 1)[1],
@@ -253,10 +262,11 @@ def dupes_media(request: Request, id: str, which: str, convert: int = 0, start: 
 
 @router.post("/dupes/restore-names", **post)
 def dupes_restore_names():
-    """Duplicates used to be renamed on their way into _dupes; give the files that are still there their original names back."""
+    """Duplicates used to be renamed on their way into the dupes folder; give the files that are still there their original names back."""
     media.release_all()
-    steps = [("Refresh inventory of xtosort$", [f"{SORTER}/hash_all.py", "xtosort$", "8"]), ("Restore original file names", [f"{SORTER}/purge.py", "restore-names"]),
-             ("Refresh inventory of xtosort$", [f"{SORTER}/hash_all.py", "xtosort$", "8"]), ("Rebuild the duplicate list", [f"{SORTER}/purge.py", "analyze"])]
+    src = libcfg.get()["src_share"]
+    steps = [(f"Refresh inventory of {src}", [f"{SORTER}/hash_all.py", src, "8"]), ("Restore original file names", [f"{SORTER}/purge.py", "restore-names"]),
+             (f"Refresh inventory of {src}", [f"{SORTER}/hash_all.py", src, "8"]), ("Rebuild the duplicate list", [f"{SORTER}/purge.py", "analyze"])]
     return _start("restore-dupe-names", steps, env=PURGE)
 
 
@@ -270,6 +280,59 @@ def dupes_release(body: ReleaseReq):
     import smbio
     it = _item(body.id)
     return {"closed": media.release([smbio.unc(*it["dupe"]), smbio.unc(*it["keep"])])}
+
+
+# ------------------------------------------------------------------ library setup (paths, shares, folder names)
+class LibrarySettings(BaseModel):
+    smb_host: str
+    src_share: str
+    dst_share: str
+    src_root: str
+    dst_root: str
+    dupes_dir: str
+    review_dir: str
+    movies_dir: str
+    organize_by_studio: bool
+    stash_base: str
+    actress_dirs: str = ""  # multi-line "top-level folder = actress name", parsed here
+
+
+def _library_overview():
+    cfg = libcfg.get()
+    return {"values": cfg, "defaults": libcfg.DEFAULTS, "actress_dirs": "\n".join(f"{k} = {v}" for k, v in sorted(libcfg.actress_dirs().items()))}
+
+
+@router.get("/library")
+def library_get():
+    return _library_overview()
+
+
+@router.post("/library", **post)
+def library_save(body: LibrarySettings):
+    fields = body.model_dump(exclude={"actress_dirs"})
+    for k, v in fields.items():
+        if isinstance(v, str) and not v.strip():
+            raise HTTPException(status_code=400, detail=f"{k} cannot be empty")
+    actress_map = {}
+    for line in body.actress_dirs.splitlines():
+        if "=" in line:
+            k, v = (s.strip() for s in line.split("=", 1))
+            if k and v:
+                actress_map[k] = v
+    warning = None
+    try:
+        import smbclient
+        smbclient.reset_connection_cache()
+        try:
+            smbclient.register_session(fields["smb_host"], username=os.environ.get("SMB_USER", ""), password=os.environ.get("SMB_PASS", ""), connection_timeout=10)
+            for share in (fields["src_share"], fields["dst_share"]):
+                next(iter(smbclient.scandir(f"\\\\{fields['smb_host']}\\{share}")), None)
+        finally:
+            smbclient.reset_connection_cache()
+    except Exception as ex:
+        warning = f"saved, but could not confirm the shares are reachable yet ({type(ex).__name__}: {str(ex)[:140]}) - check the file server credentials below"
+    libcfg.save(fields, actress_map)
+    return dict(_library_overview(), warning=warning)
 
 
 # ------------------------------------------------------------------ header banner
@@ -382,5 +445,6 @@ def dupes_delete(body: Delete):
     argv = [f"{SORTER}/purge.py", "delete", f"{state.DUPES}/delete_request.json"] + (["dry"] if body.dry_run else [])
     if body.dry_run:
         return _start("delete-dupes-check", [("Check selected duplicates (nothing is deleted)", argv)], env=PURGE)
-    steps = [(f"Delete {len(body.ids)} duplicates", argv), ("Refresh inventory of xtosort$", [f"{SORTER}/hash_all.py", "xtosort$", "8"]), ("Rebuild the duplicate list", [f"{SORTER}/purge.py", "analyze"])]
+    src = libcfg.get()["src_share"]
+    steps = [(f"Delete {len(body.ids)} duplicates", argv), (f"Refresh inventory of {src}", [f"{SORTER}/hash_all.py", src, "8"]), ("Rebuild the duplicate list", [f"{SORTER}/purge.py", "analyze"])]
     return _start("delete-dupes", steps, env=PURGE)

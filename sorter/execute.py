@@ -16,19 +16,22 @@ import time
 sys.path.insert(0, os.path.dirname(__file__))
 from pypsrp.client import Client
 
+from config import DST_SHARE, DUPES_DIR, HOST, REVIEW_DIR, SRC_ROOT, SRC_SHARE, SRC_TAG, DST_ROOT, DST_TAG
+
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 MAN = f"{ROOT}/{os.environ.get('MAN_DIR', 'manifest')}"
 C = f"{ROOT}/cache"
-HOST = os.environ.get("SMB_HOST", "10.10.0.11")
-ROOTS = {"xtosort$": r"H:\xToSort$", "xsites$": r"H:\XSites$"}
+ROOTS = {SRC_SHARE: SRC_ROOT, DST_SHARE: DST_ROOT}
 BATCH = 150
 
 PS = r"""
 $ErrorActionPreference = 'Stop'
-$roots = @{ 'xtosort$' = 'H:\xToSort$'; 'xsites$' = 'H:\XSites$' }
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64)) | ConvertFrom-Json
+$roots = @{}
+foreach ($p in $payload.roots.PSObject.Properties) { $roots[$p.Name] = $p.Value }
 $planned = @($payload.planned)
 function ToLongPath([string]$share, [string]$rel) { $p = $roots[$share]; if ($rel) { $p = $p + '\' + $rel }; return '\\?\' + $p }
+function JoinRel([string]$folder, [string]$name) { if ($folder) { return $folder + '\' + $name } else { return $name } }
 function FileLen([string]$p) { return (New-Object IO.FileInfo($p)).Length }
 $out = New-Object System.Collections.ArrayList
 foreach ($op in @($payload.ops)) {
@@ -44,7 +47,7 @@ foreach ($op in @($payload.ops)) {
       }
       'move' {
         $src = ToLongPath $op.sshare $op.spath
-        $dst = ToLongPath $op.dshare ($op.dfolder + '\' + $op.dname)
+        $dst = ToLongPath $op.dshare (JoinRel $op.dfolder $op.dname)
         $parent = ToLongPath $op.dshare $op.dfolder
         if (-not [IO.File]::Exists($src)) { throw 'source missing' }
         $len = FileLen $src
@@ -127,8 +130,8 @@ def build_ops():
     S["deletes"] = [d for d in S["deletes"] if d["path"] not in excl]
     S["funscripts"] = [f for f in S["funscripts"] if f["video"] not in excl]
     S["replace_existing"] = [x for x in S["replace_existing"] if x["replaced_by"] not in excl]
-    inv_t = json.load(open(f"{C}/inv_xtosort.json"))
-    inv_s = json.load(open(f"{C}/inv_xsites.json"))
+    inv_t = json.load(open(f"{C}/inv_{SRC_TAG}.json"))
+    inv_s = json.load(open(f"{C}/inv_{DST_TAG}.json"))
     size_t = {e["path"]: e["size"] for e in inv_t if not e.get("dir")}
     xs_top = {e["path"].lower() for e in inv_s if e.get("dir") and "\\" not in e["path"]}
     ops = []
@@ -139,17 +142,17 @@ def build_ops():
     # 1) folders
     need = collections.OrderedDict()
     if any(r["action"] == "DUPE" for r in rows) or S["replace_existing"]:
-        need[("xtosort$", "_dupes")] = 1
+        need[(SRC_SHARE, DUPES_DIR)] = 1
     for r in rows:
         if r["action"] in ("MOVE", "RELOCATE") and r["dest_folder"] and r["dest_folder"].lower() not in xs_top:
-            need[("xsites$", r["dest_folder"])] = 1
+            need[(DST_SHARE, r["dest_folder"])] = 1
     for (share, folder) in need:
         add("1-mkdir", type="mkdir", share=share, rel=folder)
     planned = [f"{s}|{f}" for (s, f) in need]
     used_dupes = {r["dest_name"].lower() for r in rows if r["action"] == "DUPE"}
-    used_dupes |= {e["path"].split("\\")[-1].lower() for e in inv_t if not e.get("dir") and "error" not in e and e["path"].lower().startswith("_dupes\\")}
+    used_dupes |= {e["path"].split("\\")[-1].lower() for e in inv_t if not e.get("dir") and "error" not in e and e["path"].lower().startswith(DUPES_DIR.lower() + "\\")}
 
-    # 2) replace existing xsites files with better copies -> _dupes
+    # 2) replace existing library files with better copies -> dupes
     for x in S["replace_existing"]:
         name = os.path.basename(x["path"].replace("\\", "/"))
         n = 1
@@ -158,37 +161,36 @@ def build_ops():
             n += 1
             name = f"{base} ({n}){ext}"
         used_dupes.add(name.lower())
-        add("2-replace", type="move", sshare="xsites$", spath=x["path"], size=x["size"], dshare="xtosort$", dfolder="_dupes", dname=name, note="replaced by better quality " + x["replaced_by"])
+        add("2-replace", type="move", sshare=DST_SHARE, spath=x["path"], size=x["size"], dshare=SRC_SHARE, dfolder=DUPES_DIR, dname=name, note="replaced by better quality " + x["replaced_by"])
     # 3) dupes, 4) moves, 5) relocations
     for r in rows:
         if r["action"] == "DUPE":
-            ks = "xsites$" if "existing xsites" in r["notes"][0] else "xtosort$"
-            add("3-dupe", type="move", sshare="xtosort$", spath=r["src"], size=r["size"], dshare="xtosort$", dfolder="_dupes", dname=r["dest_name"], keep_share=ks, keep_path=r["keep"])
+            add("3-dupe", type="move", sshare=SRC_SHARE, spath=r["src"], size=r["size"], dshare=SRC_SHARE, dfolder=DUPES_DIR, dname=r["dest_name"], keep_share=r.get("keep_share", SRC_SHARE), keep_path=r["keep"])
     for r in rows:
         if r["action"] == "MOVE":
-            add("4-move", type="move", sshare="xtosort$", spath=r["src"], size=r["size"], dshare="xsites$", dfolder=r["dest_folder"], dname=r["dest_name"])
+            add("4-move", type="move", sshare=SRC_SHARE, spath=r["src"], size=r["size"], dshare=DST_SHARE, dfolder=r["dest_folder"], dname=r["dest_name"])
     for r in rows:
         if r["action"] == "RELOCATE":
-            add("5-relocate", type="move", sshare="xsites$", spath=r["src"], size=r["size"], dshare="xsites$", dfolder=r["dest_folder"], dname=r["dest_name"])
+            add("5-relocate", type="move", sshare=DST_SHARE, spath=r["src"], size=r["size"], dshare=DST_SHARE, dfolder=r["dest_folder"], dname=r["dest_name"])
     # 6) funscripts follow their video
     for f in S["funscripts"]:
         if f["video"]:
-            add("6-funscript", type="move", sshare="xtosort$", spath=f["src"], size=size_t[f["src"]], dshare=f["dest_share"], dfolder=f["dest_folder"], dname=f["dest_name"], video=f["video"])
+            add("6-funscript", type="move", sshare=SRC_SHARE, spath=f["src"], size=size_t[f["src"]], dshare=f["dest_share"], dfolder=f["dest_folder"], dname=f["dest_name"], video=f["video"])
     # 7) delete non-video files, 8) remove emptied folders (deepest first)
     for d in S["deletes"]:
-        add("7-delete", type="delete", share="xtosort$", path=d["path"], size=d["size"])
+        add("7-delete", type="delete", share=SRC_SHARE, path=d["path"], size=d["size"])
     for r in rows:  # sample clips of movie rips are always deleted (a row skipped in the review screen is already filtered out above)
         if r["action"] == "DELETE_SAMPLE":
-            add("7-delete", type="delete", share="xtosort$", path=r["src"], size=r["size"])
-    srcs = [o["spath"] for o in ops if o["type"] == "move" and o["sshare"] == "xtosort$"] + [o["path"] for o in ops if o["type"] == "delete"]
+            add("7-delete", type="delete", share=SRC_SHARE, path=r["src"], size=r["size"])
+    srcs = [o["spath"] for o in ops if o["type"] == "move" and o["sshare"] == SRC_SHARE] + [o["path"] for o in ops if o["type"] == "delete"]
     dirset = set()
     for sp in srcs:
         parts = sp.split("\\")[:-1]
         for k in range(1, len(parts) + 1):
             dirset.add("\\".join(parts[:k]))
-    dirs = sorted((d for d in dirset if d.lower() != "_dupes"), key=lambda p: (-p.count("\\"), p))
+    dirs = sorted((d for d in dirset if d.lower() != DUPES_DIR.lower()), key=lambda p: (-p.count("\\"), p))
     for d in dirs:
-        add("8-rmdir", type="rmdir", share="xtosort$", path=d)
+        add("8-rmdir", type="rmdir", share=SRC_SHARE, path=d)
     return ops, planned, rows, S
 
 
@@ -205,11 +207,11 @@ def pick_pilot(ops, rows, S):
     deletes = {d["path"] for d in S["deletes"] if d["path"].lower().endswith(".jpg")}
     lifecycle = [m for m in moves if "\\" in m["spath"] and (m["spath"] + ".jpg") in deletes]
     pick += rnd.sample(lifecycle, 2)
-    kinds = {"fp": lambda r: r["conf"] == "high", "analvids": lambda r: "analvids.com" in r["method"], "filename": lambda r: r["conf"] == "filename", "text": lambda r: r["conf"] == "medium" and "analvids" not in r["method"], "tosort": lambda r: r["dest_folder"] == "_To Sort"}
+    kinds = {"fp": lambda r: r["conf"] == "high", "analvids": lambda r: "analvids.com" in r["method"], "filename": lambda r: r["conf"] == "filename", "text": lambda r: r["conf"] == "medium" and "analvids" not in r["method"], "tosort": lambda r: r["dest_folder"] == REVIEW_DIR}
     for k, n in (("fp", 4), ("analvids", 1), ("filename", 1), ("text", 1), ("tosort", 1)):
         cand = [m for m in moves if kinds[k](rowby[m["spath"]]) and m not in pick]
         pick += rnd.sample(cand, n)
-    newf = [m for m in moves if any(o["type"] == "mkdir" and o["rel"] == m["dfolder"] and o["share"] == m["dshare"] for o in by_phase["1-mkdir"]) and m["dfolder"] not in ("_dupes",) and m not in pick]
+    newf = [m for m in moves if any(o["type"] == "mkdir" and o["rel"] == m["dfolder"] and o["share"] == m["dshare"] for o in by_phase["1-mkdir"]) and m["dfolder"] not in (DUPES_DIR,) and m not in pick]
     pick += rnd.sample(newf, 1)
     longest = max(moves, key=lambda m: len(m["spath"]))
     if longest not in pick:
@@ -241,7 +243,7 @@ def client():
 
 
 def run_batch(c, mode, ops, planned):
-    payload = base64.b64encode(json.dumps({"ops": ops, "planned": planned}).encode()).decode()
+    payload = base64.b64encode(json.dumps({"ops": ops, "planned": planned, "roots": ROOTS}).encode()).decode()
     out, streams, had = c.execute_ps(f"$mode='{mode}'\n$b64='{payload}'\n{PS}")
     if streams.error:
         raise RuntimeError(str(streams.error[0])[:300])

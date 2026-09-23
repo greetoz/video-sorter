@@ -5,7 +5,8 @@ import time
 
 import requests
 
-BASE = "https://stashdb.org"
+from config import STASH_BASE as BASE
+
 CACHE = os.path.join(os.path.dirname(__file__), "..", "cache")
 SCENE_FIELDS = """id title code release_date duration
   studio { id name parent { id name } }

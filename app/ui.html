@@ -96,7 +96,7 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
     <div class="small" id="inbox" style="margin:6px 0"></div><div class="small mut" id="autoline" style="margin:-2px 0 8px"></div><button class="p" id="bScan">Scan &amp; identify</button></div></div>
 
   <div class="card step"><div class="num" id="n2">2</div><div class="grow"><h2>Plan</h2>
-    <div class="mut small">Decides for every video in <span class="mono">xtosort$</span> the site folder and the new name, and finds duplicates. Read-only.</div>
+    <div class="mut small">Decides for every video in <span class="mono cfg-src">xtosort$</span> the site folder and the new name, and finds duplicates. Read-only.</div>
     <div class="chips" id="planchips"></div><button class="p" id="bPlan">Build plan</button></div></div>
 
   <div class="card step"><div class="num" id="n3">3</div><div class="grow"><h2>Review</h2>
@@ -113,7 +113,7 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
 
 <section id="t-dupes" hidden>
   <div class="card"><h2>Duplicates</h2>
-    <div class="mut small">Files in <span class="mono">xtosort$\_dupes</span> that were sorted out because a better or identical copy exists. <b>Certain</b> means the kept copy was proven identical (byte compare on the server) or the same scene at equal or better quality (same StashDB scene, same duration, matching frames).</div>
+    <div class="mut small">Files in <span class="mono cfg-src">xtosort$</span>\<span class="mono cfg-dupes">_dupes</span> that were sorted out because a better or identical copy exists. <b>Certain</b> means the kept copy was proven identical (byte compare on the server) or the same scene at equal or better quality (same StashDB scene, same duration, matching frames).</div>
     <div class="chips" id="dchips"></div>
     <div class="row"><button class="b" id="bVerify">Verify duplicates</button><span class="mut small" id="dver"></span></div>
     <div class="small mut" style="margin-top:8px">Click a row to compare the duplicate with its kept copy, side by side, right here.</div></div>
@@ -127,7 +127,7 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
 
 <section id="t-settings" hidden>
   <div class="card" id="autocard"><h2>Automatic nightly run</h2>
-    <p class="mut small" style="margin:0 0 10px">Scans, plans and runs everything it is confident about, and leaves the rest in <span class="mono">xtosort$</span> for you to review on the Sort tab. It only deletes what you switch on below.</p>
+    <p class="mut small" style="margin:0 0 10px">Scans, plans and runs everything it is confident about, and leaves the rest in <span class="mono cfg-src">xtosort$</span> for you to review on the Sort tab. It only deletes what you switch on below.</p>
     <div class="row"><label class="row" style="gap:8px"><input type="checkbox" id="aOn"><b>Run automatically every night</b></label><span class="mut small">at</span><input type="time" id="aTime" value="03:00"><select id="aTz"></select><span class="mut small" id="aNext"></span></div>
     <h2 style="margin-top:18px;font-size:15px">What counts as confident</h2>
     <div class="small mut" style="margin:0 0 6px">Always: a file whose content fingerprint matches a StashDB scene goes to its studio folder with the standard name.</div>
@@ -146,6 +146,23 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
     <div class="small mut" id="bnStat" style="margin-top:6px"></div></div>
   <div class="card"><h2>Connections</h2><div id="conn" class="mut small">Checking…</div></div>
   <div class="card"><h2>Credentials</h2><p class="mut small" style="margin:0 0 8px">Stored in the app's data volume, not in the stack. A new password is tested before it replaces the old one. This changes what the app uses; it does not change the account's password on the domain.</p><div id="creds"></div></div>
+  <div class="card"><h2>Library setup</h2>
+    <p class="mut small" style="margin:0 0 10px">Where your files live. Saved to the app's data volume, so it survives redeploys; changes take effect on the next scan (a changed file server address needs a restart).</p>
+    <div class="row"><div class="grow"><div class="small mut">File server address</div><input id="libHost" class="grow" style="width:100%" placeholder="10.0.0.5"></div>
+      <div class="grow"><div class="small mut">Source share - where downloads land, unsorted</div><input id="libSrc" class="grow" style="width:100%" placeholder="downloads$"></div>
+      <div class="grow"><div class="small mut">Library share - the sorted result</div><input id="libDst" class="grow" style="width:100%" placeholder="library$"></div></div>
+    <label class="row" style="gap:8px;margin-top:12px"><input type="checkbox" id="libOrg"><b>Organize the library into per-studio subfolders</b></label>
+    <div class="small mut" style="margin:2px 0 0 24px">Off: every sorted video lands directly in the library share, no subfolders.</div>
+    <details style="margin-top:14px"><summary class="small" style="cursor:pointer;color:var(--mut)">Advanced</summary>
+      <div class="row" style="margin-top:10px"><div class="grow"><div class="small mut">Source share's local path on the file server (for PowerShell remoting)</div><input id="libSrcRoot" class="grow" style="width:100%" placeholder="H:\Downloads$"></div>
+        <div class="grow"><div class="small mut">Library share's local path</div><input id="libDstRoot" class="grow" style="width:100%" placeholder="H:\Library$"></div></div>
+      <div class="row" style="margin-top:10px"><div class="grow"><div class="small mut">Dupes folder (inside the source share)</div><input id="libDupes" class="grow" style="width:100%"></div>
+        <div class="grow"><div class="small mut">Review folder (inside the library share)</div><input id="libReview" class="grow" style="width:100%"></div>
+        <div class="grow"><div class="small mut">Movies folder (inside the library share)</div><input id="libMovies" class="grow" style="width:100%"></div></div>
+      <div class="row" style="margin-top:10px"><div class="grow"><div class="small mut">StashDB (or self-hosted stash-box) address</div><input id="libStash" class="grow" style="width:100%"></div></div>
+      <div class="small mut" style="margin:10px 0 4px">Top-level source-share folders named after an actress (her name is appended to files inside that StashDB does not already credit her on) - your own convention, if you use folders like that. One per line, <span class="mono">folder name = actress name</span>:</div>
+      <textarea id="libActress" rows="4" style="width:100%" placeholder="Some Actress Anal Pack = Some Actress"></textarea></details>
+    <div class="row" style="margin-top:14px"><button class="p" id="libSave">Save</button><span class="msg" id="libMsg" style="margin:0"></span></div></div>
 </section>
 
 <dialog id="pdlg" class="wide">
@@ -158,7 +175,7 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
     <video class="sa" id="vA" playsinline preload="metadata"></video><video class="sb" id="vB" playsinline preload="metadata"></video>
     <div class="msg bad sa" id="pErrA"></div><div class="msg bad sb" id="pErrB"></div>
     <button class="b keep sa" id="pKeepA">Keep this one, delete the other</button><button class="b keep sb" id="pKeepB">Keep this one, delete the other</button>
-    <button class="b keep full" id="pBoth" title="Moves the duplicate to the _To Sort folder in the library. Nothing is deleted.">Not a duplicate - these are different videos, keep both</button>
+    <button class="b keep full" id="pBoth" title="Moves the duplicate to the library's review folder. Nothing is deleted.">Not a duplicate - these are different videos, keep both</button>
   </div>
   <div class="pctl" style="margin-top:12px">
     <div class="row"><button class="b" id="pBack">-10 s</button><button class="p" id="pPlay">Play</button><button class="b" id="pFwd">+10 s</button><input type="range" id="pSeek" min="0" max="1000" value="0"><span class="mono small" id="pTime">0:00 / 0:00</span></div>
@@ -173,7 +190,7 @@ header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);bord
   </div>
 </dialog>
 
-<dialog id="adlg"><h2>Run the automatic run now?</h2><p style="margin:8px 0 0">It scans, plans, and then moves everything the rules above consider confident (and deletes only what you switched on). What is left stays in <span class="mono">xtosort$</span> for you to review.</p>
+<dialog id="adlg"><h2>Run the automatic run now?</h2><p style="margin:8px 0 0">It scans, plans, and then moves everything the rules above consider confident (and deletes only what you switched on). What is left stays in <span class="mono cfg-src">xtosort$</span> for you to review.</p>
   <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="b" id="aNo">Cancel</button><button class="p" id="aYes">Run now</button></div></dialog>
 
 <dialog id="kdlg"><h2>Delete the other file?</h2><p id="kTxt" style="margin:8px 0 0"></p>
@@ -199,6 +216,8 @@ const api=async(url,body)=>{const r=await fetch(url,body===undefined?{}:{method:
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok)throw new Error(typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||r.status));return j};
 let dview=[],job={status:'idle'},tab='sort',plan=null,rows=[],page=0,dupes=null,dsel=new Set(),dpage=0;const PAGE=100;
+let CFG={smb_host:'',src_share:'xtosort$',dst_share:'xsites$',src_root:'',dst_root:'',dupes_dir:'_dupes',review_dir:'_To Sort',movies_dir:'_Movie_Scenes',organize_by_studio:true,stash_base:''};
+function applyCfg(){document.querySelectorAll('.cfg-src').forEach(e=>e.textContent=CFG.src_share);document.querySelectorAll('.cfg-dupes').forEach(e=>e.textContent=CFG.dupes_dir)}
 
 // ---------- tabs
 document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.onclick=()=>show(b.dataset.t));
@@ -224,11 +243,11 @@ function lockUI(){const b=busy();['bScan','bPlan','bValidate','bVerify','bCheckD
 
 // ---------- sort
 async function loadSort(){const o=await api('/api/sort');plan=o.plan;const live=!!plan&&!plan.executed;autoLine();
-  $('inbox').innerHTML=`<b>${o.inbox.videos}</b> videos (${fmt(o.inbox.bytes)}) waiting in xtosort$ <span class="mut">· last scan ${when(o.inbox.scanned)}</span>`;
+  $('inbox').innerHTML=`<b>${o.inbox.videos}</b> videos (${fmt(o.inbox.bytes)}) waiting in ${CFG.src_share} <span class="mut">· last scan ${when(o.inbox.scanned)}</span>`;
   $('n1').className='num'+(o.inbox.scanned?' done':'');$('n2').className='num'+(live?' done':'');
   const chips=$('planchips');chips.innerHTML='';
   if(live){const a=plan.actions,c=(l,v,t)=>v?`<span class="chip"><b>${v}</b>${l}</span>`:'';
-    chips.innerHTML=c('move',a.MOVE)+c('duplicate → _dupes',a.DUPE)+c('relocate',a.RELOCATE)+c('sample clips to delete',a.DELETE_SAMPLE)+c('unidentified',plan.unidentified)+c('new folders',plan.new_folders)+c('funscripts',plan.funscripts)+c('files to delete',plan.deletes)+c('better copies replacing existing',plan.replace_existing)+`<span class="chip mut">planned ${when(plan.planned)}</span>`;
+    chips.innerHTML=c('move',a.MOVE)+c(`duplicate → ${CFG.dupes_dir}`,a.DUPE)+c('relocate',a.RELOCATE)+c('sample clips to delete',a.DELETE_SAMPLE)+c('unidentified',plan.unidentified)+c('new folders',plan.new_folders)+c('funscripts',plan.funscripts)+c('files to delete',plan.deletes)+c('better copies replacing existing',plan.replace_existing)+`<span class="chip mut">planned ${when(plan.planned)}</span>`;
     const r=await api('/api/sort/rows');rows=r.rows;buildFilters();renderRows()}else{rows=[];renderRows()}
   updateExec();$('n3').className='num'+(live?' done':'');$('n4').className='num'+(plan&&plan.executed?' done':'')}
 function buildFilters(){const fill=(id,vals,all)=>{const cur=$(id).value;$(id).innerHTML=`<option value="">${all}</option>`+[...new Set(vals)].sort().map(v=>`<option>${esc(v)}</option>`).join('');$(id).value=cur};
@@ -246,7 +265,7 @@ $('pPrev').onclick=()=>{page--;renderRows()};$('pNext').onclick=()=>{page++;rend
 let saveT;function saveSkips(){clearTimeout(saveT);saveT=setTimeout(async()=>{try{await api('/api/sort/exclude',{srcs:rows.filter(r=>r.skip).map(r=>r.src)});const o=await api('/api/sort');plan=o.plan;updateExec()}catch(e){alert(e.message)}},400)}
 $('rows').onchange=e=>{const s=e.target.dataset.src;if(s==null)return;const r=rows.find(x=>x.src===s);r.skip=e.target.checked;e.target.closest('tr').classList.toggle('skip',r.skip);saveSkips()};
 $('bSkipAll').onclick=()=>{filtered().forEach(r=>r.skip=true);renderRows();saveSkips()};$('bUnskipAll').onclick=()=>{filtered().forEach(r=>r.skip=false);renderRows();saveSkips()};
-const PH={mkdir:['new folder','new folders'],replace:['old copy to _dupes','old copies to _dupes'],dupe:['duplicate to _dupes','duplicates to _dupes'],move:['move','moves'],relocate:['relocation','relocations'],funscript:['funscript','funscripts'],delete:['file deleted','files deleted'],rmdir:['emptied folder removed','emptied folders removed']};
+const PH={mkdir:['new folder','new folders'],replace:['old copy set aside','old copies set aside'],dupe:['duplicate set aside','duplicates set aside'],move:['move','moves'],relocate:['relocation','relocations'],funscript:['funscript','funscripts'],delete:['file deleted','files deleted'],rmdir:['emptied folder removed','emptied folders removed']};
 const phases=b=>Object.entries(b||{}).map(([k,n])=>`${n} ${(PH[k]||[k,k])[n===1?0:1]}`).join(', ');
 function updateExec(){const v=$('vstat'),d=plan&&plan.dry;$('bValidate').disabled=busy()||!plan||!!plan.executed;$('bExec').disabled=busy()||!(plan&&plan.dry_current&&d.failures===0&&!plan.executed);
   v.className='small';if(!plan)v.textContent='';else if(plan.executed)v.textContent=`Executed ${when(plan.executed.t)}: ${plan.executed.ops} operations (${phases(plan.executed.by_phase)}), ${plan.executed.failures} failures. Scan again for new files.`;
@@ -277,7 +296,7 @@ $('drows').onchange=e=>{const i=e.target.dataset.id;if(i==null)return;e.target.c
 $('dAllCertain').onclick=()=>{dupes.rows.filter(r=>r.verdict==='CERTAIN').forEach(r=>dsel.add(r.id));renderDupes()};$('dNone').onclick=()=>{dsel.clear();renderDupes()};
 $('bVerify').onclick=()=>run('/api/dupes/verify');
 $('bCheckDel').onclick=async()=>{const s=selInfo();try{await api('/api/dupes/delete',{ids:[...dsel],include_review:s.review>0,dry_run:true});await pollNow();$('dmsg').className='msg';$('dmsg').textContent='Checking on the file server - nothing is deleted. See the log above.'}catch(e){$('dmsg').className='msg bad';$('dmsg').textContent=e.message}};
-$('bDelete').onclick=()=>{const s=selInfo();$('dlgword').textContent=`DELETE ${s.n}`;$('dlgtxt').innerHTML=`<b>${s.n}</b> files (${fmt(s.bytes)}) will be deleted from <span class="mono">xtosort$\\_dupes</span>.`+(s.review?` <b style="color:var(--warn)">${s.review} of them were not verified as identical to their kept copy.</b>`:'');$('dlgin').value='';$('dlgyes').disabled=true;$('dlg').showModal()};
+$('bDelete').onclick=()=>{const s=selInfo();$('dlgword').textContent=`DELETE ${s.n}`;$('dlgtxt').innerHTML=`<b>${s.n}</b> files (${fmt(s.bytes)}) will be deleted from <span class="mono">${CFG.src_share}\\${CFG.dupes_dir}</span>.`+(s.review?` <b style="color:var(--warn)">${s.review} of them were not verified as identical to their kept copy.</b>`:'');$('dlgin').value='';$('dlgyes').disabled=true;$('dlg').showModal()};
 $('dlgin').oninput=()=>$('dlgyes').disabled=$('dlgin').value!==$('dlgword').textContent;$('dlgno').onclick=()=>$('dlg').close();
 $('dlgyes').onclick=async()=>{const s=selInfo();$('dlg').close();try{await api('/api/dupes/delete',{ids:[...dsel],include_review:s.review>0,confirm:$('dlgin').value});dsel.clear();await pollNow();$('dmsg').className='msg';$('dmsg').textContent=''}catch(e){$('dmsg').className='msg bad';$('dmsg').textContent=e.message}};
 
@@ -345,7 +364,7 @@ async function decide(kind,done){  // kind: dupe | keep | both ; done: what to s
   if(n>=0&&dview[n]){await openPlayer(n)}else $('pdlg').close();  // decided: on to the next pair (a failed one stays so you can see why)
   if($('pdlg').open){$('pAct').className='msg '+(ok?'ok':'bad');$('pAct').textContent=ok?done+' Here is the next pair.':`Not done: ${why}`}}
 $('kYes').onclick=()=>{const k=$('kdlg').dataset.keep;$('kdlg').close();decide(k==='A'?'dupe':'keep',`Deleted ${SIDE[other(k)].meta.name}.`)};
-$('pBoth').onclick=()=>decide('both',`Kept both: ${SIDE.A.meta.name} moved to _To Sort.`);
+$('pBoth').onclick=()=>decide('both',`Kept both: ${SIDE.A.meta.name} moved to ${CFG.review_dir}.`);
 $('pMark').onchange=()=>{if(!PI)return;const on=$('pMark').checked;on?dsel.add(PI.id):dsel.delete(PI.id);renderDupes();
   if(on)setTimeout(async()=>{if(await navPlayer(1)&&$('pdlg').open){$('pAct').className='msg ok';$('pAct').textContent='Marked for deletion. Here is the next pair.'}},250)};  // marking is a decision too: on to the next pair
 document.addEventListener('keydown',e=>{if(!$('pdlg').open||$('kdlg').open||e.ctrlKey||e.metaKey||e.altKey)return;const t=e.target,tag=t.tagName,range=tag==='INPUT'&&t.type==='range';
@@ -360,26 +379,26 @@ const NAMES={smb:'File server (SMB + PowerShell remoting)',stash:'StashDB'};
 async function autoLine(){try{const a=await api('/api/auto'),h=a.history.find(x=>x.kind==='run');
   $('autoline').textContent='Automatic run: '+(a.settings.enabled?`on, next ${a.next}`:'off')+(h?` · last: ${when(h.t)} - ${h.status!=='done'?h.status:`moved ${h.moved+h.dupes}, deleted ${h.deleted}, ${h.left==null?h.review:h.left} left for review`}`:'')}catch(e){}}
 // ---------- automatic run (Settings page)
-const POL=[['text_matches','Also move files matched only by performer / title / date','Less certain: this is where wrong matches come from.'],
- ['exact_dupes','Move byte-identical copies of files you already have to _dupes','Nothing is deleted; you delete them yourself on the Duplicates tab.'],
+const POL=()=>[['text_matches','Also move files matched only by performer / title / date','Less certain: this is where wrong matches come from.'],
+ ['exact_dupes',`Move byte-identical copies of files you already have to ${CFG.dupes_dir}`,'Nothing is deleted; you delete them yourself on the Duplicates tab.'],
  ['samples','Delete sample clips of movie rips',''],
  ['junk','Delete leftover images / nfo / txt files','Only once every video in their folder is handled.'],
  ['archives','Delete archives (.rar / .zip)','Off by default: they may still contain videos.'],
- ['unidentified','Move unidentified files to _To Sort','Off by default: they stay in xtosort$ for you to review.']];
+ ['unidentified',`Move unidentified files to ${CFG.review_dir}`,`Off by default: they stay in ${CFG.src_share} for you to review.`]];
 const BROWSER_TZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){return 'UTC'}})();
 let AUTO=null;
 function tzList(){let l=[];try{l=Intl.supportedValuesOf('timeZone')}catch(e){}return l.length?l:['UTC','Europe/Amsterdam','Europe/Stockholm','Europe/London','America/New_York']}
 async function loadAuto(){AUTO=await api('/api/auto');const c=AUTO.settings,d=AUTO.defaults;
   $('aOn').checked=c.enabled;$('aTime').value=c.time;const tz=(!c.enabled&&c.tz==='UTC')?BROWSER_TZ:c.tz;
   $('aTz').innerHTML=[...new Set([tz,...tzList()])].map(t=>`<option ${t===tz?'selected':''}>${esc(t)}</option>`).join('');
-  $('aPol').innerHTML=POL.map(([k,t,h])=>`<label class="row small" style="align-items:flex-start;gap:8px;margin:6px 0"><input type="checkbox" data-pol="${k}" ${c.policy[k]?'checked':''}><span>${esc(t)}${h?` <span class="mut">- ${esc(h)}</span>`:''}${c.policy[k]!==d[k]?' <span class="pill warn">changed</span>':''}</span></label>`).join('');
+  $('aPol').innerHTML=POL().map(([k,t,h])=>`<label class="row small" style="align-items:flex-start;gap:8px;margin:6px 0"><input type="checkbox" data-pol="${k}" ${c.policy[k]?'checked':''}><span>${esc(t)}${h?` <span class="mut">- ${esc(h)}</span>`:''}${c.policy[k]!==d[k]?' <span class="pill warn">changed</span>':''}</span></label>`).join('');
   $('aLimit').value=c.policy.limit;$('aNext').textContent=c.enabled&&AUTO.next?`Next run: ${AUTO.next}`:'Switched off - nothing runs on its own.';
   const P=AUTO.preview;$('aPrev').innerHTML=P?`<div class="card" style="margin:14px 0 0"><b>Preview of the plan on the Sort tab</b>
    <div class="small" style="margin:6px 0">${P.held?`<span class="pill warn">held</span> More files would be handled than the safety limit (${P.limit}), so a real run would do nothing tonight. `:''}<b>${Object.entries(P.counts).filter(([k])=>k.endsWith(':auto')).reduce((a,[,n])=>a+n,0)}</b> files would run automatically${P.auto_deletes?` (+ ${P.auto_deletes} leftover files deleted)`:''}, <b>${P.review_total}</b> stay for review.</div>
    ${P.review.length?`<div class="tw"><table><thead><tr><th>Stays for review</th><th>Action</th><th>Why</th></tr></thead><tbody>${P.review.slice(0,100).map(r=>`<tr><td class="mono">${esc(r.src)}</td><td>${esc(r.action)}</td><td class="small mut">${esc(r.why)}</td></tr>`).join('')}</tbody></table></div>${P.review_total>100?`<div class="small mut">... and ${P.review_total-100} more - the Sort tab shows them all.</div>`:''}`:''}
    <div style="margin-top:8px"><button class="b" id="aToSort">Open on the Sort tab</button></div></div>`:'';
   if($('aToSort'))$('aToSort').onclick=()=>show('sort');
-  const H=AUTO.history;$('aHist').innerHTML=H.length?`<h2 style="margin-top:18px;font-size:15px">Recent automatic runs</h2><div class="tw"><table><thead><tr><th>When</th><th>What</th><th>Result</th><th>Moved</th><th>To _dupes</th><th>Deleted</th><th>Left for review</th></tr></thead><tbody>${H.map(h=>{const pv=h.kind==='preview',cls=h.status!=='done'?'bad':h.held?'warn':'ok',txt=h.status!=='done'?h.status:h.held?'held':'ok';
+  const H=AUTO.history;$('aHist').innerHTML=H.length?`<h2 style="margin-top:18px;font-size:15px">Recent automatic runs</h2><div class="tw"><table><thead><tr><th>When</th><th>What</th><th>Result</th><th>Moved</th><th>Set aside</th><th>Deleted</th><th>Left for review</th></tr></thead><tbody>${H.map(h=>{const pv=h.kind==='preview',cls=h.status!=='done'?'bad':h.held?'warn':'ok',txt=h.status!=='done'?h.status:h.held?'held':'ok';
    return `<tr><td>${when(h.t)}</td><td>${pv?'preview':h.trigger==='schedule'?'nightly':'manual run'}</td><td><span class="pill ${cls}">${txt}</span>${h.note?`<div class="small mut">${esc(h.note)}</div>`:''}</td>
     <td>${pv?`<span class="mut">would: ${h.would.moved}</span>`:h.moved}</td><td>${pv?`<span class="mut">would: ${h.would.dupes}</span>`:h.dupes}</td><td>${pv?'-':h.deleted}</td><td>${pv?h.review:(h.left==null?h.review:h.left)}</td></tr>`}).join('')}</tbody></table></div>`:''}
 async function saveAuto(quiet){const policy={limit:+$('aLimit').value};document.querySelectorAll('#aPol input[data-pol]').forEach(i=>policy[i.dataset.pol]=i.checked);
@@ -393,7 +412,19 @@ async function loadSettings(){loadBannerCard().catch(()=>{});loadAuto().catch(e=
   const j=await api('/api/settings');$('creds').innerHTML=Object.entries(j).map(([k,v])=>`<form class="row" data-k="${k}" style="margin:10px 0"><b style="flex:0 0 100%">${NAMES[k]}</b>
    <input name="username" value="${esc(v.username)}" placeholder="username" autocomplete="off" class="grow"><input name="password" type="password" placeholder="${v.configured?'new password':'password'}" autocomplete="new-password" required class="grow"><button class="p">Save</button><div class="msg" style="flex:0 0 100%"></div></form>`).join('');
   document.querySelectorAll('#creds form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('button'),m=f.querySelector('.msg');b.disabled=true;m.className='msg';m.textContent='Testing…';
-   try{const r=await api('/api/settings/'+f.dataset.k,{username:f.username.value,password:f.password.value});m.className='msg ok';m.textContent=r.detail;f.password.value='';fetch('/api/status').then(r=>r.json()).then(j=>{$('conn').innerHTML=Object.entries(j).map(([k,v])=>`<div class="row" style="margin:8px 0"><span class="dot" style="background:var(--${v.ok?'ok':'bad'})"></span><div class="grow"><b>${esc(k)}</b> <span class="mut">(${v.ms} ms)</span><div class="mut small">${esc(v.detail)}</div></div></div>`).join('')})}catch(x){m.className='msg bad';m.textContent=x.message}b.disabled=false})}
+   try{const r=await api('/api/settings/'+f.dataset.k,{username:f.username.value,password:f.password.value});m.className='msg ok';m.textContent=r.detail;f.password.value='';fetch('/api/status').then(r=>r.json()).then(j=>{$('conn').innerHTML=Object.entries(j).map(([k,v])=>`<div class="row" style="margin:8px 0"><span class="dot" style="background:var(--${v.ok?'ok':'bad'})"></span><div class="grow"><b>${esc(k)}</b> <span class="mut">(${v.ms} ms)</span><div class="mut small">${esc(v.detail)}</div></div></div>`).join('')})}catch(x){m.className='msg bad';m.textContent=x.message}b.disabled=false})
+  await loadLibrary()}
+
+// ---------- library setup (paths, shares, folder names)
+async function loadLibrary(){const o=await api('/api/library'),v=o.values;
+  $('libHost').value=v.smb_host;$('libSrc').value=v.src_share;$('libDst').value=v.dst_share;$('libOrg').checked=v.organize_by_studio;
+  $('libSrcRoot').value=v.src_root;$('libDstRoot').value=v.dst_root;$('libDupes').value=v.dupes_dir;$('libReview').value=v.review_dir;$('libMovies').value=v.movies_dir;$('libStash').value=v.stash_base;
+  if(document.activeElement!==$('libActress'))$('libActress').value=o.actress_dirs}
+$('libSave').onclick=async()=>{const m=$('libMsg');m.className='msg';m.textContent='Saving…';
+  try{const o=await api('/api/library',{smb_host:$('libHost').value.trim(),src_share:$('libSrc').value.trim(),dst_share:$('libDst').value.trim(),
+    src_root:$('libSrcRoot').value.trim(),dst_root:$('libDstRoot').value.trim(),dupes_dir:$('libDupes').value.trim(),review_dir:$('libReview').value.trim(),movies_dir:$('libMovies').value.trim(),
+    organize_by_studio:$('libOrg').checked,stash_base:$('libStash').value.trim(),actress_dirs:$('libActress').value});
+   CFG=o.values;applyCfg();m.className='msg '+(o.warning?'bad':'ok');m.textContent=o.warning||'Saved.'}catch(e){m.className='msg bad';m.textContent=e.message}};
 
 // ---------- header banner
 let BN={items:[],i:0,timer:null,paused:false};
@@ -426,5 +457,5 @@ async function loadBannerCard(){const o=await api('/api/banner'),c=o.config;$('b
 async function pollBanner(){for(let i=0;i<180;i++){const o=await loadBannerCard();if(!o.status.running)break;await sleep(2000)}loadBanner();$('bnMsg').textContent=''}
 $('bnSave').onclick=async()=>{try{await api('/api/banner/settings',{enabled:$('bnOn').checked,names:$('bnNames').value.split('\n'),seconds:+$('bnSec').value,source:$('bnSrc').value});$('bnMsg').className='msg ok';$('bnMsg').textContent='Saved - fetching pictures...';pollBanner()}catch(e){$('bnMsg').className='msg bad';$('bnMsg').textContent=e.message}};
 $('bnAgain').onclick=async()=>{try{await api('/api/banner/refresh',{});$('bnMsg').className='msg ok';$('bnMsg').textContent='Fetching new pictures...';pollBanner()}catch(e){$('bnMsg').className='msg bad';$('bnMsg').textContent=e.message}};
-loadBanner();pollJob();show('sort');
+(async()=>{try{CFG=(await api('/api/library')).values}catch(e){}applyCfg();loadBanner();pollJob();show('sort')})();
 </script></main></body></html>

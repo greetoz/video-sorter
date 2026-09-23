@@ -5,7 +5,8 @@ import threading
 
 import smbclient
 
-HOST = os.environ.get("SMB_HOST", "10.10.0.11")
+from config import HOST
+
 VIDEO_EXT = {".mp4", ".mkv", ".avi", ".wmv", ".mov", ".m4v", ".ts", ".flv", ".mpg", ".mpeg", ".webm", ".vid"}
 
 

@@ -1,10 +1,5 @@
 """Read-only connectivity checks used by the status page."""
-import os
-import sys
 import time
-
-sys.path.insert(0, "/app/sorter")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sorter"))
 
 
 def timed(fn):
@@ -17,11 +12,13 @@ def timed(fn):
 
 
 def smb():
+    import config
     import smbclient
     import smbio
     smbio.connect()
+    cfg = config.get()
     out = []
-    for share in ("xtosort$", "xsites$"):
+    for share in (cfg["src_share"], cfg["dst_share"]):
         n = sum(1 for _ in smbclient.scandir(smbio.unc(share)))
         out.append(f"{share}: {n} top-level entries")
     return "; ".join(out)
@@ -44,15 +41,17 @@ def test_login(kind, user, password):
     """Try a login with the given credentials without touching the ones in use. Returns (ok, detail)."""
     try:
         if kind == "smb":
+            import config
             import smbclient
             import smbio
+            cfg = config.get()
             smbclient.reset_connection_cache()
             try:
-                smbclient.register_session(smbio.HOST, username=user, password=password, connection_timeout=15)
-                n = sum(1 for _ in smbclient.scandir(smbio.unc("xtosort$")))
+                smbclient.register_session(cfg["smb_host"], username=user, password=password, connection_timeout=15)
+                n = sum(1 for _ in smbclient.scandir(smbio.unc(cfg["src_share"])))
             finally:
                 smbclient.reset_connection_cache()  # the next real connect() registers the stored credentials
-            return True, f"logged in as {user}; xtosort$ has {n} top-level entries"
+            return True, f"logged in as {user}; {cfg['src_share']} has {n} top-level entries"
         import requests
         from stash import BASE
         s = requests.Session()

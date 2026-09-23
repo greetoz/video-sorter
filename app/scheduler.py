@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sorter"))
 import autoselect  # noqa: E402  (DEFAULT_POLICY / merged)
+import config  # noqa: E402
 
 from app import jobs, state  # noqa: E402
 
@@ -80,13 +81,14 @@ def start(kind="run", trigger="manual"):
     rid1 = state.new_run()
     rid2 = f"{rid1}-left" if kind == "run" else None
     e1 = {"MAN_DIR": f"manifest/runs/{rid1}", "SCHEDULE_FILE": FILE}
-    steps = [(f"Inventory + hash {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in ("xtosort$", "xsites$")]
-    steps += [(f"Look up {s} on StashDB", [f"{SORTER}/lookup_fp.py", s]) for s in ("xtosort$", "xsites$")]
+    shares = (config.get()["src_share"], config.get()["dst_share"])
+    steps = [(f"Inventory + hash {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in shares]
+    steps += [(f"Look up {s} on StashDB", [f"{SORTER}/lookup_fp.py", s]) for s in shares]
     steps += [("Identify and plan", [f"{SORTER}/plan.py"], e1), ("Apply the confidence rules", [f"{SORTER}/autoselect.py"], e1)]
     if kind == "run":
         os.makedirs(state.run_path(rid2), exist_ok=True)
         steps += [("Validate and execute the confident files", [f"{SORTER}/autorun.py"], e1)]
-        steps += [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in ("xtosort$", "xsites$")]
+        steps += [(f"Refresh inventory of {s}", [f"{SORTER}/hash_all.py", s, "8"]) for s in shares]
         steps += [("Plan what is left for review", [f"{SORTER}/plan.py"], {"MAN_DIR": f"manifest/runs/{rid2}", "SCHEDULE_FILE": FILE})]
 
     def done(job, log):

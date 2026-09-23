@@ -1,4 +1,4 @@
-"""Dry-run planner: identify every video in xtosort$, decide destination + new name, resolve duplicates.
+"""Dry-run planner: identify every video in the source share, decide destination + new name, resolve duplicates.
 Read-only. Writes manifest/manifest.json + manifest.csv. Usage: plan.py"""
 import collections
 import csv
@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import analvids
 import probe
 import smbio
+from config import ACTRESS_DIRS, DST_SHARE, DST_TAG, DUPES_DIR, MOVIES_DIR, ORGANIZE_BY_STUDIO, REVIEW_DIR, SRC_SHARE, SRC_TAG
 from names import MAX_NAME, append_name, build_name, norm, sanitize
 from parse import camel_split, parse
 from stash import Stash
@@ -21,16 +22,15 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 C = f"{ROOT}/cache"
 OUT = f"{ROOT}/{os.environ.get('MAN_DIR', 'manifest')}"
 os.makedirs(OUT, exist_ok=True)
-SRC, DST = "xtosort$", "xsites$"
-DUPES, TOSORT, MOVIES = "_dupes", "_To Sort", "_Movie_Scenes"
-# top-level xtosort folders named after an actress -> her name (files inside get her name appended if not already credited)
-ACTRESS_DIRS = {
-    "Holly Michaels": "Holly Michaels", "Marina Visconti": "Marina Visconti", "Lena Paul": "Lena Paul",
-    "AJ Applegate Anal Pack": "AJ Applegate", "nicole aniston 2": "Nicole Aniston",
-}
+SRC, DST = SRC_SHARE, DST_SHARE
+DUPES, TOSORT, MOVIES = DUPES_DIR, REVIEW_DIR, MOVIES_DIR
+# top-level src_share folders named after an actress -> her name (files inside get her name appended if not already credited)
+# your own convention, if you use folders like that; set from Settings > Library, empty by default. The two special cases just
+# below (an "Alexis Tae" megapack folder, a "Dredd" movie-title pattern) are this project's own reference examples of the same
+# idea done in code instead of config - harmless for anyone else, since they only match a folder/file name that specific way.
 STOP = {"and", "the", "xxx", "of", "in", "to", "with", "for", "her", "his", "a", "an", "on", "at", "is", "s"}
 load = lambda n: json.load(open(f"{C}/{n}"))
-inv_t, inv_s, h_t, h_s = load("inv_xtosort.json"), load("inv_xsites.json"), load("hash_xtosort.json"), load("hash_xsites.json")
+inv_t, inv_s, h_t, h_s = load(f"inv_{SRC_TAG}.json"), load(f"inv_{DST_TAG}.json"), load(f"hash_{SRC_TAG}.json"), load(f"hash_{DST_TAG}.json")
 smbio.connect()
 st = Stash()
 
@@ -44,7 +44,9 @@ for f in sorted(all_folders, key=lambda f: -folder_count[f]):
 
 
 def folder_for(studio):
-    """-> (folder, how) where how in exact|parent|fuzzy|NEW"""
+    """-> (folder, how) where how in exact|parent|fuzzy|NEW|flat"""
+    if not ORGANIZE_BY_STUDIO:
+        return "", "flat"  # everything lands directly in DST, no per-studio subfolders
     chain = [studio["name"]] + ([studio["parent"]["name"]] if studio.get("parent") else [])
     for depth, n in enumerate(chain):
         for v in (n, re.sub(r"\.(com|net|tv|xxx)$", "", n, flags=re.I), n.replace("&", "and"), re.sub(r"^the ", "", n, flags=re.I)):
@@ -178,7 +180,7 @@ def text_match(info, actress, dur):
     return None
 
 
-# ---------------------------------------------------------------- collect + identify xtosort videos
+# ---------------------------------------------------------------- collect + identify videos from the source share
 items = []
 for e in inv_t:
     if e.get("dir") or "error" in e or not smbio.is_video(e["path"]):
@@ -192,7 +194,7 @@ for e in inv_t:
     items.append(it)
 
 
-ONLY = os.environ.get("PLAN_ONLY")  # json list of xtosort paths: restrict the plan to these files
+ONLY = os.environ.get("PLAN_ONLY")  # json list of source-share paths: restrict the plan to these files
 only_tops = set()
 if ONLY:
     only_set = set(json.load(open(ONLY)))
@@ -226,8 +228,8 @@ st.save()
 print("probe failures:", sum(1 for it in items if it["dur"] is None), flush=True)
 print("identified:", collections.Counter(("matched-" + i["conf"]) if i["scene"] else "unmatched" for i in items), flush=True)
 
-# ---------------------------------------------------------------- duplicates vs existing xsites + within xtosort
-existing = collections.defaultdict(list)  # scene id -> xsites files
+# ---------------------------------------------------------------- duplicates vs the existing library + within the source share
+existing = collections.defaultdict(list)  # scene id -> library files
 for e in vids_s:
     h = (h_s.get(e["path"]) or [0, None])[1]
     for sid in st.fp.get(h) or []:
@@ -290,8 +292,8 @@ for sid, xs in by_scene.items():
             if m is win[1]:
                 continue
             if k == "X":
-                why = f"dupe of {'existing xsites file ' + win[1]['path'] if win[0] == 'E' else 'xtosort file ' + win[1]['src']} (same scene; kept higher/equal quality {win[1].get('height')}p)"
-                actions[m["src"]] = {"action": "DUPE", "reason": why, "keep": win[1].get("path") or win[1]["src"]}
+                why = f"dupe of {'existing library file ' + win[1]['path'] if win[0] == 'E' else 'other new file ' + win[1]['src']} (same scene; kept higher/equal quality {win[1].get('height')}p)"
+                actions[m["src"]] = {"action": "DUPE", "reason": why, "keep": win[1].get("path") or win[1]["src"], "keep_share": DST if win[0] == "E" else SRC}
             elif win[0] == "X":
                 replace_existing.append({"path": m["path"], "height": m.get("height"), "size": m["size"], "replaced_by": win[1]["src"], "winner_height": win[1].get("height"), "winner_size": win[1]["size"]})
 
@@ -301,9 +303,9 @@ for it in sorted(items, key=lambda i: (0 if "DVDRip" in i["src"] else 1, i["src"
     if it["src"] in actions or not it["hash"]:
         continue
     if it["hash"] in existing_by_hash:
-        actions[it["src"]] = {"action": "DUPE", "reason": "identical (oshash+size) to existing xsites file", "keep": existing_by_hash[it["hash"]][0]}
+        actions[it["src"]] = {"action": "DUPE", "reason": "identical (oshash+size) to an existing library file", "keep": existing_by_hash[it["hash"]][0], "keep_share": DST}
     elif (it["hash"], it["size"]) in first_seen:
-        actions[it["src"]] = {"action": "DUPE", "reason": "identical to another xtosort file", "keep": first_seen[(it["hash"], it["size"])]}
+        actions[it["src"]] = {"action": "DUPE", "reason": "identical to another new file", "keep": first_seen[(it["hash"], it["size"])], "keep_share": SRC}
     else:
         first_seen[(it["hash"], it["size"])] = it["src"]
 
@@ -323,7 +325,7 @@ for it in sorted(items, key=lambda i: i["src"]):
     if it["src"] in actions:
         a = actions[it["src"]]
         # a duplicate keeps its original file name: that is what identifies it when you compare it with the kept copy later
-        row.update(action="DUPE", dest_share=SRC, dest_folder=DUPES, dest_name=fn, notes=[a["reason"], "original file name kept"], keep=a["keep"])
+        row.update(action="DUPE", dest_share=SRC, dest_folder=DUPES, dest_name=fn, notes=[a["reason"], "original file name kept"], keep=a["keep"], keep_share=a["keep_share"])
         if sc:
             row["scene"] = sc["id"]
     elif sc:
@@ -408,7 +410,7 @@ for it in sorted(items, key=lambda i: i["src"]):
         row["notes"].append("PATH TOO LONG")
     rows.append(row)
 
-# ---------------------------------------------------------------- relocate existing _Movie_Scenes studio scenes (within xsites$)
+# ---------------------------------------------------------------- relocate existing MOVIES_DIR studio scenes (within the library share)
 replaced_paths = {x["path"] for x in replace_existing}
 ms_scene = collections.defaultdict(list)
 for e in vids_s:
@@ -445,7 +447,7 @@ for sid, files in ([] if ONLY else ms_scene.items()):
             key = (norm(folder), name.lower())
         used[key] += 1
         row.update(action="RELOCATE", dest_share=DST, dest_folder=folder, dest_name=name, studio=sc["studio"]["name"], date=sc["release_date"], title=sc["title"], performers=performers)
-        row["notes"].append("existing xsites file moved out of _Movie_Scenes (StashDB knows it as a studio scene); renamed to standard format")
+        row["notes"].append(f"existing library file moved out of {MOVIES} (StashDB knows it as a studio scene); renamed to standard format")
         if n > 1:
             row["notes"].append(f"name collision -> numbered ({n})")
         rows.append(row)
