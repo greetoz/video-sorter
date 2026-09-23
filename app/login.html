@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video Sorter - sign in</title>
+<meta name="theme-color" content="#0b0508">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff4f9a' d='M16 28C4 19 2 12 2 9a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 3-2 10-14 19z'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#0b0508;--card:#170b12;--fg:#f6ebf1;--mut:#a88f9c;--bad:#ff5a5f;--acc:#ff4f9a;--acc2:#b3125f;--gold:#e2bb6c;--line:#2f1824;--glow:rgba(255,79,154,.28);--shadow:0 10px 30px -14px rgba(0,0,0,.85)}
+@media (prefers-color-scheme:light){:root{--bg:#fbf1f5;--card:#fff;--fg:#2b1420;--mut:#84666f;--line:#ecd6df;--acc:#d81b70;--acc2:#a30f57;--gold:#95671c;--bad:#d1242f;--glow:rgba(216,27,112,.22);--shadow:0 10px 28px -16px rgba(120,20,70,.35)}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;color:var(--fg);font:15px/1.5 system-ui,sans-serif;background:radial-gradient(1100px 520px at 12% -8%,color-mix(in srgb,var(--acc2) 30%,transparent),transparent 62%),radial-gradient(900px 420px at 100% 0,color-mix(in srgb,var(--gold) 12%,transparent),transparent 58%),var(--bg);background-attachment:fixed}
+h1{font-family:Didot,"Bodoni MT","Playfair Display",Georgia,serif;font-weight:600;font-size:23px;margin:0 0 18px;text-align:center;letter-spacing:.02em}
+h1 em{font-style:italic;background:linear-gradient(90deg,var(--acc),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:2px}
+form{background:linear-gradient(180deg,color-mix(in srgb,var(--acc2) 7%,var(--card)),var(--card) 55%);border:1px solid var(--line);border-radius:14px;padding:28px 26px;box-shadow:var(--shadow);width:min(340px,calc(100vw - 32px))}
+label{display:block;font-size:13px;color:var(--mut);margin:14px 0 5px}
+input{width:100%;background:color-mix(in srgb,var(--bg) 80%,var(--card));color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit}
+input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--glow)}
+button{width:100%;margin-top:20px;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;border:0;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 6px 18px -6px var(--glow)}
+button:hover{filter:brightness(1.1)}
+.err{color:var(--bad);font-size:13px;margin-top:12px;text-align:center;min-height:1em}
+</style></head>
+<body>
+<form method="post" action="/login" autocomplete="off">
+<h1><em>Video</em> Sorter</h1>
+<label for="password">Password</label>
+<input id="password" name="password" type="password" autofocus required>
+<button type="submit">Sign in</button>
+<div class="err">__ERROR__</div>
+</form>
+</body></html>

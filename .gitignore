@@ -1,0 +1,12 @@
+# scratch/working data from one-off sorting sessions - not part of the deployed app
+/cache/
+/manifest/
+/manifest_r1/
+/manifest_r2/
+/manifest_r3/
+/tosort/
+/xstars/
+/xsites_cleanup/
+
+__pycache__/
+*.pyc

@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video Sorter</title>
+<meta name="theme-color" content="#0b0508">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff4f9a' d='M16 28C4 19 2 12 2 9a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 3-2 10-14 19z'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#0b0508;--card:#170b12;--fg:#f6ebf1;--mut:#a88f9c;--ok:#5fd6a0;--bad:#ff5a5f;--warn:#e6b85c;--acc:#ff4f9a;--acc2:#b3125f;--gold:#e2bb6c;--line:#2f1824;--glow:rgba(255,79,154,.28);--shadow:0 10px 30px -14px rgba(0,0,0,.85)}
+@media (prefers-color-scheme:light){:root{--bg:#fbf1f5;--card:#fff;--fg:#2b1420;--mut:#84666f;--line:#ecd6df;--acc:#d81b70;--acc2:#a30f57;--gold:#95671c;--ok:#12855a;--warn:#a86a10;--bad:#d1242f;--glow:rgba(216,27,112,.22);--shadow:0 10px 28px -16px rgba(120,20,70,.35)}}
+*{box-sizing:border-box}::selection{background:var(--acc);color:#fff}
+body{margin:0;color:var(--fg);font:15px/1.5 system-ui,sans-serif;background:radial-gradient(1100px 520px at 12% -8%,color-mix(in srgb,var(--acc2) 30%,transparent),transparent 62%),radial-gradient(900px 420px at 100% 0,color-mix(in srgb,var(--gold) 12%,transparent),transparent 58%),var(--bg);background-attachment:fixed}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+h1,h2{font-family:Didot,"Bodoni MT","Playfair Display",Georgia,serif;font-weight:600}
+h1{font-size:25px;margin:0;letter-spacing:.02em}h1 em{font-style:italic;background:linear-gradient(90deg,var(--acc),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:2px}
+h2{font-size:17px;margin:0 0 4px;letter-spacing:.01em}
+header{position:relative;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;margin-bottom:16px}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:1px;background:linear-gradient(90deg,var(--acc),var(--gold) 45%,transparent)}
+nav{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;box-shadow:var(--shadow)}
+nav button{background:none;color:var(--mut);border:0;border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer;transition:color .15s}
+nav button:hover{color:var(--fg)}
+nav button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 4px 14px -4px var(--glow)}
+.card{background:linear-gradient(180deg,color-mix(in srgb,var(--acc2) 7%,var(--card)),var(--card) 55%);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;box-shadow:var(--shadow)}
+.row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}.grow{flex:1 1 240px}
+.mut{color:var(--mut)}.small{font-size:13px}.mono{font-family:ui-monospace,monospace;word-break:break-all}
+button.b,button.p,button.d{border-radius:8px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);transition:filter .15s,border-color .15s,box-shadow .15s}
+button.b:hover:not(:disabled){border-color:var(--acc);box-shadow:0 0 0 3px var(--glow)}
+button.p{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-color:transparent;box-shadow:0 6px 18px -6px var(--glow)}
+button.d{background:linear-gradient(135deg,#e5484d,#8f1730);border-color:transparent;color:#fff}
+button.p:hover:not(:disabled),button.d:hover:not(:disabled){filter:brightness(1.1)}
+button:disabled{opacity:.42;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.chip{border:1px solid var(--line);border-radius:999px;padding:2px 12px;font-size:13px;background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.chip b{margin-right:4px;color:var(--gold)}
+.pill{border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700;white-space:nowrap;letter-spacing:.03em}
+.pill.ok{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}.pill.bad{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}.pill.acc{background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--acc)}.pill.mut{background:var(--line);color:var(--mut)}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc),var(--gold));transition:width .4s}
+pre{background:color-mix(in srgb,var(--bg) 70%,#000);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:260px;overflow:auto;font-size:12px;margin:8px 0 0;white-space:pre-wrap;word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--gold);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}tbody tr:hover td{background:color-mix(in srgb,var(--acc) 6%,transparent)}tr.skip td{opacity:.45}
+.tw{overflow-x:auto}.arrow{color:var(--acc)}
+input,select,textarea{background:color-mix(in srgb,var(--bg) 80%,var(--card));color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;min-width:0}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--glow)}
+input[type=checkbox]{width:16px;height:16px;padding:0;accent-color:var(--acc)}
+tr.click{cursor:pointer}
+dialog.wide{max-width:1280px;width:calc(100% - 24px);padding:16px 18px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:10px;align-items:start}.pgrid>*{min-width:0}
+.pgrid video{width:100%;aspect-ratio:16/9;background:#000;border-radius:8px;object-fit:contain;display:block}
+.pgrid button.keep{width:100%;margin-top:4px}.pgrid .full{grid-column:1/-1}
+.pctl input[type=range]{flex:1 1 300px;accent-color:var(--acc)}.pctl button.b{padding:5px 12px}
+@media (max-width:820px){.pgrid{grid-template-columns:1fr}.pgrid .sb{order:1}}
+.step{display:flex;gap:14px}.num{flex:none;width:28px;height:28px;border-radius:50%;background:transparent;border:1px solid var(--acc);color:var(--acc);display:grid;place-items:center;font-weight:700;font-size:13px}
+.num.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.msg{font-size:13px;margin-top:6px}.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+dialog{background:var(--card);color:var(--fg);border:1px solid color-mix(in srgb,var(--acc) 55%,var(--line));border-radius:14px;max-width:520px;width:calc(100% - 32px);padding:22px;box-shadow:0 0 44px -6px var(--glow),var(--shadow)}
+dialog::backdrop{background:rgba(8,2,5,.72);backdrop-filter:blur(3px)}
+.dot{width:12px;height:12px;border-radius:50%;margin-top:6px;background:var(--mut);flex:none}.ok>.dot{background:var(--ok)}.bad>.dot{background:var(--bad)}
+.pager{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:10px}
+.banner{position:relative;height:200px;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin:0 0 16px;box-shadow:var(--shadow);background:linear-gradient(120deg,var(--acc2),var(--bg))}
+.bslide{position:absolute;inset:0;opacity:0;transition:opacity 1.2s ease}.bslide.on{opacity:1}
+.bslide img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 30%;transform:scale(1.03);transition:transform 12s ease-out}.bslide.on img{transform:scale(1.11)}
+.bshade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,5,8,.9) 0%,rgba(11,5,8,.58) 36%,rgba(11,5,8,.05) 72%),linear-gradient(0deg,rgba(11,5,8,.65),transparent 52%),linear-gradient(180deg,rgba(11,5,8,.7),transparent 42%)}
+.btext{position:absolute;left:28px;bottom:24px;right:28px;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.6)}
+.bname{font-family:Didot,"Bodoni MT","Playfair Display",Georgia,serif;font-size:36px;line-height:1.1;font-weight:600;letter-spacing:.02em}
+.bline{width:56px;height:2px;margin:10px 0 8px;background:linear-gradient(90deg,var(--acc),var(--gold))}
+.bsub{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+.bdots{position:absolute;right:16px;bottom:14px;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:60%}
+.bdots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.38);cursor:pointer;transition:background .3s,transform .3s}.bdots i.on{background:var(--acc);transform:scale(1.35)}
+/* the banner is the header's background: title and tabs sit on top of the picture */
+header.has-banner{min-height:280px;padding:16px 20px;align-items:flex-start;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);margin-bottom:16px}
+header.has-banner::after{display:none}
+header.has-banner .banner{position:absolute;inset:0;height:auto;margin:0;border:0;border-radius:0;box-shadow:none;z-index:0}
+header.has-banner h1,header.has-banner nav{position:relative;z-index:2}
+header.has-banner h1{color:#fff;filter:drop-shadow(0 2px 10px rgba(0,0,0,.75))}
+header.has-banner nav{background:rgba(11,5,8,.55);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.14)}
+.bslide.right .btext{left:auto;right:28px;text-align:right}
+.bslide.right .bline{margin-left:auto}
+.bslide.right .bshade{background:linear-gradient(270deg,rgba(11,5,8,.9) 0%,rgba(11,5,8,.58) 36%,rgba(11,5,8,.05) 72%),linear-gradient(0deg,rgba(11,5,8,.65),transparent 52%),linear-gradient(180deg,rgba(11,5,8,.7),transparent 42%)}
+.banner.right .bdots{right:auto;left:16px}
+@media (max-width:640px){header.has-banner{min-height:210px}.bname{font-size:26px}.btext{left:16px;bottom:16px}}
+@media (prefers-reduced-motion:reduce){.bslide img{transition:none;transform:none!important}.bslide{transition:none}}
+[hidden]{display:none!important}
+</style></head><body><main>
+<header><div id="banner" class="banner" hidden aria-hidden="true"><div class="bslides"></div><div class="bdots"></div></div><h1>Video <em>Sorter</em></h1>
+<nav id="tabs"><button data-t="sort" class="on">Sort</button><button data-t="dupes">Duplicates</button><button data-t="settings">Settings</button><button id="logout" class="b" title="Log out" style="margin-left:6px">Log out</button></nav></header>
+
+<div id="jobbar" class="card" hidden>
+  <div class="row"><span id="jpill" class="pill mut"></span><b id="jlabel" class="grow"></b><span id="jtime" class="mut small"></span>
+    <button class="b" id="jcancel" hidden>Cancel</button><button class="b" id="jlogbtn">Log</button></div>
+  <div class="bar" id="jbarw" hidden><i id="jbar" style="width:0"></i></div><div class="small mut" id="jprog"></div>
+  <pre id="jlog" hidden></pre>
+</div>
+
+<section id="t-sort">
+  <div class="card step"><div class="num" id="n1">1</div><div class="grow"><h2>Scan</h2>
+    <div class="mut small">Lists both shares, hashes new files and looks them up on StashDB. Read-only; only new or changed files are hashed.</div>
+    <div class="small" id="inbox" style="margin:6px 0"></div><div class="small mut" id="autoline" style="margin:-2px 0 8px"></div><button class="p" id="bScan">Scan &amp; identify</button></div></div>
+
+  <div class="card step"><div class="num" id="n2">2</div><div class="grow"><h2>Plan</h2>
+    <div class="mut small">Decides for every video in <span class="mono">xtosort$</span> the site folder and the new name, and finds duplicates. Read-only.</div>
+    <div class="chips" id="planchips"></div><button class="p" id="bPlan">Build plan</button></div></div>
+
+  <div class="card step"><div class="num" id="n3">3</div><div class="grow"><h2>Review</h2>
+    <div class="mut small">Tick <b>skip</b> on anything that should stay where it is; skipped rows are not touched. Sample clips of movie rips are deleted by default; tick skip to keep one.</div>
+    <div class="row" style="margin:10px 0"><select id="fAction"><option value="">All actions</option></select><select id="fConf"><option value="">All confidence</option></select>
+      <input id="fText" placeholder="Search source, destination, notes" class="grow"><button class="b" id="bSkipAll">Skip filtered</button><button class="b" id="bUnskipAll">Include filtered</button></div>
+    <div class="tw"><table><thead><tr><th>Skip</th><th>Action</th><th>File</th><th>Conf.</th><th>Notes</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager"><span id="pinfo" class="mut small"></span><button class="b" id="pPrev">Prev</button><button class="b" id="pNext">Next</button></div></div></div>
+
+  <div class="card step"><div class="num" id="n4">4</div><div class="grow"><h2>Validate &amp; execute</h2>
+    <div class="mut small">Validation checks every operation on the file server (source, size, destination, folders) and changes nothing. Executing does a same-volume move, so it is instant and never overwrites.</div>
+    <div class="row" style="margin-top:10px"><button class="b" id="bValidate">Validate</button><button class="p" id="bExec">Execute</button><span id="vstat" class="small"></span></div><div class="msg" id="sortmsg"></div></div></div>
+</section>
+
+<section id="t-dupes" hidden>
+  <div class="card"><h2>Duplicates</h2>
+    <div class="mut small">Files in <span class="mono">xtosort$\_dupes</span> that were sorted out because a better or identical copy exists. <b>Certain</b> means the kept copy was proven identical (byte compare on the server) or the same scene at equal or better quality (same StashDB scene, same duration, matching frames).</div>
+    <div class="chips" id="dchips"></div>
+    <div class="row"><button class="b" id="bVerify">Verify duplicates</button><span class="mut small" id="dver"></span></div>
+    <div class="small mut" style="margin-top:8px">Click a row to compare the duplicate with its kept copy, side by side, right here.</div></div>
+  <div class="card">
+    <div class="row"><select id="dFilter"><option value="">All</option><option value="CERTAIN">Certain</option><option value="REVIEW">Needs review</option><option value="UNVERIFIED">Unverified</option><option value="OTHER">Other files</option></select>
+      <input id="dText" placeholder="Search" class="grow"><button class="b" id="dAllCertain">Select all certain</button><button class="b" id="dNone">Select none</button></div>
+    <div class="tw"><table style="margin-top:10px"><thead><tr><th></th><th>Verdict</th><th>Duplicate</th><th>Kept copy</th><th>Why</th></tr></thead><tbody id="drows"></tbody></table></div>
+    <div class="pager"><span id="dpinfo" class="mut small"></span><button class="b" id="dPrev">Prev</button><button class="b" id="dNext">Next</button></div>
+    <div class="row" style="margin-top:14px"><span id="dsel" class="grow"></span><button class="b" id="bCheckDel">Check selected</button><button class="d" id="bDelete">Delete selected…</button></div><div class="msg" id="dmsg"></div></div>
+</section>
+
+<section id="t-settings" hidden>
+  <div class="card" id="autocard"><h2>Automatic nightly run</h2>
+    <p class="mut small" style="margin:0 0 10px">Scans, plans and runs everything it is confident about, and leaves the rest in <span class="mono">xtosort$</span> for you to review on the Sort tab. It only deletes what you switch on below.</p>
+    <div class="row"><label class="row" style="gap:8px"><input type="checkbox" id="aOn"><b>Run automatically every night</b></label><span class="mut small">at</span><input type="time" id="aTime" value="03:00"><select id="aTz"></select><span class="mut small" id="aNext"></span></div>
+    <h2 style="margin-top:18px;font-size:15px">What counts as confident</h2>
+    <div class="small mut" style="margin:0 0 6px">Always: a file whose content fingerprint matches a StashDB scene goes to its studio folder with the standard name.</div>
+    <div id="aPol"></div>
+    <div class="row small" style="margin-top:8px"><span>Safety limit</span><input type="number" id="aLimit" min="1" max="100000" style="width:90px"><span class="mut">files per night. If a run would handle more than that, it does nothing and tells you.</span></div>
+    <div class="row" style="margin-top:14px"><button class="p" id="aSave">Save</button><button class="b" id="aPreview" title="Scans and plans and applies the rules, but moves nothing. The result appears below and on the Sort tab.">Preview now</button><button class="b" id="aRun">Run now...</button><span class="msg" id="aMsg" style="margin:0"></span></div>
+    <div id="aPrev"></div><div id="aHist"></div></div>
+  <div class="card"><h2>Header banner</h2>
+    <p class="mut small" style="margin:0 0 10px">A rotating banner under the title. The pictures come from StashDB and are cached in the app, so your browser only loads them from here.</p>
+    <div class="row"><label class="row" style="gap:8px"><input type="checkbox" id="bnOn"><b>Show the banner</b></label><span class="mut small">pictures</span>
+      <select id="bnSrc"><option value="scenes">from scenes in your library (landscape)</option><option value="portraits">performer portraits</option></select>
+      <span class="mut small">change every</span><select id="bnSec"><option value="5">5</option><option value="8">8</option><option value="12">12</option><option value="20">20</option><option value="30">30</option></select><span class="mut small">seconds</span></div>
+    <div class="small mut" style="margin:10px 0 4px">Performers, one per line, as they are spelled on StashDB:</div>
+    <textarea id="bnNames" rows="8" style="width:100%"></textarea>
+    <div class="row" style="margin-top:10px"><button class="p" id="bnSave">Save and fetch pictures</button><button class="b" id="bnAgain" title="Picks new scenes for every performer">Fetch new pictures</button><span class="msg" id="bnMsg" style="margin:0"></span></div>
+    <div class="small mut" id="bnStat" style="margin-top:6px"></div></div>
+  <div class="card"><h2>Connections</h2><div id="conn" class="mut small">Checking…</div></div>
+  <div class="card"><h2>Credentials</h2><p class="mut small" style="margin:0 0 8px">Stored in the app's data volume, not in the stack. A new password is tested before it replaces the old one. This changes what the app uses; it does not change the account's password on the domain.</p><div id="creds"></div></div>
+</section>
+
+<dialog id="pdlg" class="wide">
+  <div class="row"><b class="grow" id="pTitle">Compare</b><button class="b" id="plPrev">&#9664; Previous</button><button class="b" id="plNext">Next &#9654;</button><button class="b" id="pClose">Close</button></div>
+  <div class="small" id="pReason" style="margin-top:4px"></div>
+  <div class="pgrid">
+    <div class="row small sa"><span class="pill warn">Duplicate</span><span class="mono grow" id="pNameA"></span></div>
+    <div class="row small sb"><span class="pill ok">Kept copy</span><span class="mono grow" id="pNameB"></span></div>
+    <div class="mut small sa" id="pMetaA"></div><div class="mut small sb" id="pMetaB"></div>
+    <video class="sa" id="vA" playsinline preload="metadata"></video><video class="sb" id="vB" playsinline preload="metadata"></video>
+    <div class="msg bad sa" id="pErrA"></div><div class="msg bad sb" id="pErrB"></div>
+    <button class="b keep sa" id="pKeepA">Keep this one, delete the other</button><button class="b keep sb" id="pKeepB">Keep this one, delete the other</button>
+    <button class="b keep full" id="pBoth" title="Moves the duplicate to the _To Sort folder in the library. Nothing is deleted.">Not a duplicate - these are different videos, keep both</button>
+  </div>
+  <div class="pctl" style="margin-top:12px">
+    <div class="row"><button class="b" id="pBack">-10 s</button><button class="p" id="pPlay">Play</button><button class="b" id="pFwd">+10 s</button><input type="range" id="pSeek" min="0" max="1000" value="0"><span class="mono small" id="pTime">0:00 / 0:00</span></div>
+    <div class="row small" style="margin-top:8px"><span class="mut">Jump to</span><button class="b" data-p="10">10%</button><button class="b" data-p="25">25%</button><button class="b" data-p="50">50%</button><button class="b" data-p="75">75%</button><button class="b" data-p="90">90%</button>
+      <span class="mut">Audio</span><select id="pAudio"><option value="B">Kept copy</option><option value="A">Duplicate</option><option value="">Muted</option></select>
+      <span class="mut">Speed</span><select id="pSpeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>
+      <span class="mut">Volume</span><input type="range" id="pVol" min="0" max="100" value="80" style="flex:0 0 110px"><button class="b" id="pMute">Mute</button>
+      </div>
+    <div class="row small" style="margin-top:10px"><span class="mut">Kept copy offset</span><button class="b" data-o="-1">-1</button><button class="b" data-o="-0.1">-0.1</button><span class="mono" id="pOff">0.0 s</span><button class="b" data-o="0.1">+0.1</button><button class="b" data-o="1">+1</button></div>
+    <div class="row" style="margin-top:10px"><label class="small"><input type="checkbox" id="pMark"> Select this duplicate for deletion</label><span class="small mut">Space: play / pause &middot; left/right: 5 s &middot; up/down: volume &middot; M: mute &middot; double-click a video for fullscreen</span></div>
+    <div class="msg" id="pAct"></div>
+  </div>
+</dialog>
+
+<dialog id="adlg"><h2>Run the automatic run now?</h2><p style="margin:8px 0 0">It scans, plans, and then moves everything the rules above consider confident (and deletes only what you switched on). What is left stays in <span class="mono">xtosort$</span> for you to review.</p>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="b" id="aNo">Cancel</button><button class="p" id="aYes">Run now</button></div></dialog>
+
+<dialog id="kdlg"><h2>Delete the other file?</h2><p id="kTxt" style="margin:8px 0 0"></p>
+  <p class="small mut">This cannot be undone. The file server re-checks both files right before anything is deleted.</p>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="b" id="kNo">Cancel</button><button class="d" id="kYes">Delete permanently</button></div></dialog>
+
+<dialog id="xdlg"><h2>Execute the plan?</h2><p id="xtxt" style="margin:8px 0 0"></p>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="b" id="xno">Cancel</button><button class="p" id="xyes">Execute</button></div></dialog>
+
+<dialog id="dlg"><h2>Delete duplicates permanently?</h2><p id="dlgtxt"></p>
+  <p class="small mut">This cannot be undone. Before each file is deleted the file server re-checks that it still has the expected size and that the kept copy still exists with its expected size. Every deletion is logged.</p>
+  <p>Type <b id="dlgword" class="mono"></b> to confirm:</p><input id="dlgin" style="width:100%" autocomplete="off">
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="b" id="dlgno">Cancel</button><button class="d" id="dlgyes" disabled>Delete permanently</button></div></dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const H={'X-Requested-With':'xvids','Content-Type':'application/json'};
+const fmt=b=>b==null?'':b>=1e12?(b/1e12).toFixed(2)+' TB':b>=1e9?(b/1e9).toFixed(1)+' GB':(b/1e6).toFixed(0)+' MB';
+const when=t=>t?new Date(t*1000).toLocaleString():'never';
+const api=async(url,body)=>{const r=await fetch(url,body===undefined?{}:{method:'POST',headers:H,body:JSON.stringify(body)});
+  if(r.status===401){location.href='/login';throw new Error('login required')}
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||r.status));return j};
+let dview=[],job={status:'idle'},tab='sort',plan=null,rows=[],page=0,dupes=null,dsel=new Set(),dpage=0;const PAGE=100;
+
+// ---------- tabs
+document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.onclick=()=>show(b.dataset.t));
+$('logout').onclick=()=>fetch('/logout',{method:'POST',headers:H}).finally(()=>location.href='/login');
+function show(t){tab=t;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  ['sort','dupes','settings'].forEach(x=>$('t-'+x).hidden=x!==t);refresh()}
+function refresh(){if(tab==='sort')loadSort();else if(tab==='dupes')loadDupes();else loadSettings()}
+
+// ---------- job bar
+const busy=()=>job.status==='running'||job.status==='cancelling';
+async function pollJob(){try{const was=busy();job=await api('/api/job');renderJob();if(was&&!busy())refresh()}catch(e){}setTimeout(pollJob,busy()?1500:5000)}
+function renderJob(){const j=job;$('jobbar').hidden=j.status==='idle';if(j.status==='idle'){lockUI();return}
+  const cls={running:'acc',cancelling:'warn',done:'ok',failed:'bad',cancelled:'warn',interrupted:'warn'}[j.status]||'mut';
+  $('jpill').className='pill '+cls;$('jpill').textContent=j.status;$('jlabel').textContent=(j.label||j.name)+(j.steps>1?`  (step ${j.step}/${j.steps})`:'');
+  $('jtime').textContent=j.elapsed+' s';$('jcancel').hidden=j.status!=='running';
+  const p=j.progress;$('jbarw').hidden=!(p&&busy());if(p){$('jbar').style.width=(100*p[0]/p[1])+'%';$('jprog').textContent=`${p[0]} / ${p[1]}`}else $('jprog').textContent='';
+  $('jlog').textContent=(j.tail||[]).join('\n');lockUI()}
+$('jlogbtn').onclick=()=>{$('jlog').hidden=!$('jlog').hidden;$('jlog').scrollTop=1e9};
+$('jcancel').onclick=()=>api('/api/job/cancel',{}).then(pollNow);
+const pollNow=()=>api('/api/job').then(j=>{job=j;renderJob()});
+async function run(url,body){try{await api(url,body||{});await pollNow()}catch(e){alert(e.message)}}
+function lockUI(){const b=busy();['bScan','bPlan','bValidate','bVerify','bCheckDel','bDelete','aPreview','aRun'].forEach(i=>$(i).disabled=b);updateExec();updateSel()}
+
+// ---------- sort
+async function loadSort(){const o=await api('/api/sort');plan=o.plan;const live=!!plan&&!plan.executed;autoLine();
+  $('inbox').innerHTML=`<b>${o.inbox.videos}</b> videos (${fmt(o.inbox.bytes)}) waiting in xtosort$ <span class="mut">· last scan ${when(o.inbox.scanned)}</span>`;
+  $('n1').className='num'+(o.inbox.scanned?' done':'');$('n2').className='num'+(live?' done':'');
+  const chips=$('planchips');chips.innerHTML='';
+  if(live){const a=plan.actions,c=(l,v,t)=>v?`<span class="chip"><b>${v}</b>${l}</span>`:'';
+    chips.innerHTML=c('move',a.MOVE)+c('duplicate → _dupes',a.DUPE)+c('relocate',a.RELOCATE)+c('sample clips to delete',a.DELETE_SAMPLE)+c('unidentified',plan.unidentified)+c('new folders',plan.new_folders)+c('funscripts',plan.funscripts)+c('files to delete',plan.deletes)+c('better copies replacing existing',plan.replace_existing)+`<span class="chip mut">planned ${when(plan.planned)}</span>`;
+    const r=await api('/api/sort/rows');rows=r.rows;buildFilters();renderRows()}else{rows=[];renderRows()}
+  updateExec();$('n3').className='num'+(live?' done':'');$('n4').className='num'+(plan&&plan.executed?' done':'')}
+function buildFilters(){const fill=(id,vals,all)=>{const cur=$(id).value;$(id).innerHTML=`<option value="">${all}</option>`+[...new Set(vals)].sort().map(v=>`<option>${esc(v)}</option>`).join('');$(id).value=cur};
+  fill('fAction',rows.map(r=>r.action),'All actions');fill('fConf',rows.map(r=>r.conf),'All confidence')}
+const filtered=()=>{const a=$('fAction').value,c=$('fConf').value,t=$('fText').value.toLowerCase();
+  return rows.filter(r=>(!a||r.action===a)&&(!c||r.conf===c)&&(!t||(r.src+' '+r.dest_folder+' '+r.dest_name+' '+(r.notes||[]).join(' ')).toLowerCase().includes(t)))};
+function renderRows(){const f=filtered(),pages=Math.max(1,Math.ceil(f.length/PAGE));page=Math.min(page,pages-1);
+  $('rows').innerHTML=f.slice(page*PAGE,page*PAGE+PAGE).map(r=>`<tr class="${r.skip?'skip':''}"><td><input type="checkbox" data-src="${esc(r.src)}" ${r.skip?'checked':''}></td>
+   <td><span class="pill ${{MOVE:'acc',DUPE:'warn',RELOCATE:'mut',DELETE_SAMPLE:'bad'}[r.action]||'mut'}">${esc(r.action)}</span></td>
+   <td><div class="mono">${esc(r.src)}</div>${r.action==='DELETE_SAMPLE'?'':`<div class="arrow mono">→ ${esc(r.dest_folder)}${r.dest_folder?'\\':''}${esc(r.dest_name)}</div>`}<div class="mut small">${fmt(r.size)}${r.height?' · '+r.height+'p':''}</div></td>
+   <td>${esc(r.conf)}</td><td class="small mut">${esc((r.notes||[]).join(' · '))}</td></tr>`).join('')||`<tr><td colspan=5 class="mut">${plan&&plan.executed?'Nothing to review - the last run is done. Scan to look for new files.':plan?'Nothing matches.':'No plan yet.'}</td></tr>`;
+  $('pinfo').textContent=`${f.length} rows · page ${page+1}/${pages}`;$('pPrev').disabled=page<=0;$('pNext').disabled=page>=pages-1}
+['fAction','fConf','fText'].forEach(i=>$(i).oninput=()=>{page=0;renderRows()});
+$('pPrev').onclick=()=>{page--;renderRows()};$('pNext').onclick=()=>{page++;renderRows()};
+let saveT;function saveSkips(){clearTimeout(saveT);saveT=setTimeout(async()=>{try{await api('/api/sort/exclude',{srcs:rows.filter(r=>r.skip).map(r=>r.src)});const o=await api('/api/sort');plan=o.plan;updateExec()}catch(e){alert(e.message)}},400)}
+$('rows').onchange=e=>{const s=e.target.dataset.src;if(s==null)return;const r=rows.find(x=>x.src===s);r.skip=e.target.checked;e.target.closest('tr').classList.toggle('skip',r.skip);saveSkips()};
+$('bSkipAll').onclick=()=>{filtered().forEach(r=>r.skip=true);renderRows();saveSkips()};$('bUnskipAll').onclick=()=>{filtered().forEach(r=>r.skip=false);renderRows();saveSkips()};
+const PH={mkdir:['new folder','new folders'],replace:['old copy to _dupes','old copies to _dupes'],dupe:['duplicate to _dupes','duplicates to _dupes'],move:['move','moves'],relocate:['relocation','relocations'],funscript:['funscript','funscripts'],delete:['file deleted','files deleted'],rmdir:['emptied folder removed','emptied folders removed']};
+const phases=b=>Object.entries(b||{}).map(([k,n])=>`${n} ${(PH[k]||[k,k])[n===1?0:1]}`).join(', ');
+function updateExec(){const v=$('vstat'),d=plan&&plan.dry;$('bValidate').disabled=busy()||!plan||!!plan.executed;$('bExec').disabled=busy()||!(plan&&plan.dry_current&&d.failures===0&&!plan.executed);
+  v.className='small';if(!plan)v.textContent='';else if(plan.executed)v.textContent=`Executed ${when(plan.executed.t)}: ${plan.executed.ops} operations (${phases(plan.executed.by_phase)}), ${plan.executed.failures} failures. Scan again for new files.`;
+  else if(plan.exec_failed)v.innerHTML=`<span style="color:var(--bad)">The last execution stopped with ${plan.exec_failed.failures} failure(s) after ${when(plan.exec_failed.t)} - see the log. Execute again to resume.</span>`;
+  else if(!d)v.textContent='Not validated yet.';else if(!plan.dry_current)v.textContent='The plan or the skipped rows changed since the last validation - validate again.';
+  else if(d.failures)v.innerHTML=`<span style="color:var(--bad)">Validation found ${d.failures} problem(s) in ${d.ops} operations - see the log, fix or skip those rows.</span>`;
+  else v.innerHTML=`<span style="color:var(--ok)">Validated: ${d.ops} operations OK - ${phases(d.by_phase)} (${when(d.t)}).</span>`}
+$('bScan').onclick=()=>run('/api/sort/scan');$('bPlan').onclick=()=>run('/api/sort/plan');$('bValidate').onclick=()=>run('/api/sort/validate');
+$('bExec').onclick=()=>{$('xtxt').textContent='This runs the validated plan: '+phases(plan.dry.by_phase)+'.';$('xdlg').showModal()};
+$('xno').onclick=()=>$('xdlg').close();$('xyes').onclick=()=>{$('xdlg').close();run('/api/sort/execute')};
+
+// ---------- duplicates
+async function loadDupes(){dupes=await api('/api/dupes');const c=dupes.count,b=dupes.bytes;
+  $('dchips').innerHTML=`<span class="chip"><b>${c.CERTAIN||0}</b>certain · ${fmt(b.CERTAIN||0)}</span><span class="chip"><b>${c.REVIEW||0}</b>need review · ${fmt(b.REVIEW||0)}</span>${c.UNVERIFIED?`<span class="chip"><b>${c.UNVERIFIED}</b>unverified</span>`:''}${c.OTHER?`<span class="chip"><b>${c.OTHER}</b>other files</span>`:''}<span class="chip mut"><b>${c.gone||0}</b>already gone</span><span class="chip mut"><b>${dupes.deleted_ever}</b>deleted from here</span>`;
+  $('dver').textContent='Last verification: '+when(dupes.verified_at);const ids=new Set(dupes.rows.map(r=>r.id));dsel=new Set([...dsel].filter(i=>ids.has(i)));renderDupes()}
+const dfiltered=()=>{const f=$('dFilter').value,t=$('dText').value.toLowerCase();return dupes.rows.filter(r=>(!f||r.verdict===f)&&(!t||(r.dupe+' '+r.keep+' '+r.reason).toLowerCase().includes(t)))};
+function renderDupes(){if(!dupes)return;const f=dfiltered(),pages=Math.max(1,Math.ceil(f.length/PAGE));dpage=Math.min(dpage,pages-1);
+  dview=f;$('drows').innerHTML=f.slice(dpage*PAGE,dpage*PAGE+PAGE).map((r,k)=>`<tr ${r.other?'':`class="click" data-i="${dpage*PAGE+k}" title="Click to compare side by side"`}><td>${r.other?'':`<input type="checkbox" data-id="${esc(r.id)}" ${dsel.has(r.id)?'checked':''}>`}</td>
+   <td><span class="pill ${r.verdict==='CERTAIN'?'ok':r.verdict==='REVIEW'?'warn':'mut'}">${esc(r.verdict)}</span></td>
+   <td><div class="mono">${esc(r.dupe)}</div><div class="mut small">${fmt(r.dupe_size)}</div></td><td>${r.other?'<span class="mut">-</span>':`<div class="mono">${esc(r.keep_share)}\\${esc(r.keep)}</div><div class="mut small">${fmt(r.keep_size)}</div>`}</td>
+   <td class="small mut">${esc(r.reason)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">Nothing here.</td></tr>';
+  $('dpinfo').textContent=`${f.length} rows · page ${dpage+1}/${pages}`;$('dPrev').disabled=dpage<=0;$('dNext').disabled=dpage>=pages-1;updateSel()}
+function selInfo(){const rs=dupes?dupes.rows.filter(r=>dsel.has(r.id)):[];return{n:rs.length,bytes:rs.reduce((a,r)=>a+(r.dupe_size||0),0),review:rs.filter(r=>r.verdict!=='CERTAIN').length}}
+function updateSel(){const s=selInfo();$('dsel').innerHTML=s.n?`<b>${s.n}</b> selected · ${fmt(s.bytes)}${s.review?` <span class="pill warn">${s.review} not verified as identical</span>`:''}`:'<span class="mut">Nothing selected.</span>';
+  $('bCheckDel').disabled=busy()||!s.n;$('bDelete').disabled=busy()||!s.n}
+['dFilter','dText'].forEach(i=>$(i).oninput=()=>{dpage=0;renderDupes()});$('dPrev').onclick=()=>{dpage--;renderDupes()};$('dNext').onclick=()=>{dpage++;renderDupes()};
+$('drows').onchange=e=>{const i=e.target.dataset.id;if(i==null)return;e.target.checked?dsel.add(i):dsel.delete(i);updateSel()};
+$('dAllCertain').onclick=()=>{dupes.rows.filter(r=>r.verdict==='CERTAIN').forEach(r=>dsel.add(r.id));renderDupes()};$('dNone').onclick=()=>{dsel.clear();renderDupes()};
+$('bVerify').onclick=()=>run('/api/dupes/verify');
+$('bCheckDel').onclick=async()=>{const s=selInfo();try{await api('/api/dupes/delete',{ids:[...dsel],include_review:s.review>0,dry_run:true});await pollNow();$('dmsg').className='msg';$('dmsg').textContent='Checking on the file server - nothing is deleted. See the log above.'}catch(e){$('dmsg').className='msg bad';$('dmsg').textContent=e.message}};
+$('bDelete').onclick=()=>{const s=selInfo();$('dlgword').textContent=`DELETE ${s.n}`;$('dlgtxt').innerHTML=`<b>${s.n}</b> files (${fmt(s.bytes)}) will be deleted from <span class="mono">xtosort$\\_dupes</span>.`+(s.review?` <b style="color:var(--warn)">${s.review} of them were not verified as identical to their kept copy.</b>`:'');$('dlgin').value='';$('dlgyes').disabled=true;$('dlg').showModal()};
+$('dlgin').oninput=()=>$('dlgyes').disabled=$('dlgin').value!==$('dlgword').textContent;$('dlgno').onclick=()=>$('dlg').close();
+$('dlgyes').onclick=async()=>{const s=selInfo();$('dlg').close();try{await api('/api/dupes/delete',{ids:[...dsel],include_review:s.review>0,confirm:$('dlgin').value});dsel.clear();await pollNow();$('dmsg').className='msg';$('dmsg').textContent=''}catch(e){$('dmsg').className='msg bad';$('dmsg').textContent=e.message}};
+
+// ---------- compare player (two synced videos; files that a browser cannot decode are converted on the fly)
+const SIDE={A:{which:'dupe'},B:{which:'keep'}};let PI=null,PIDX=-1,PT=null,PPLAY=false,POFF=0,PDUR=0,seeking=false;
+const vid=k=>$('v'+k),pos=k=>SIDE[k].base+vid(k).currentTime,other=k=>k==='A'?'B':'A';
+const fmtT=t=>{t=Math.max(0,Math.round(t||0));const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
+const want=(k,T)=>Math.max(0,k==='A'?T:T+POFF);
+const master=()=>SIDE.A.failed&&!SIDE.B.failed?pos('B')-POFF:pos('A');
+let PVOL=0.8,PMUTE=false;try{const sv=JSON.parse(localStorage.getItem('xvidsAudio')||'null');if(sv){PVOL=sv.v;PMUTE=sv.m}}catch(e){}
+function applyAudio(){const a=$('pAudio').value;for(const k of ['A','B']){const v=vid(k);v.volume=PVOL;v.muted=PMUTE||a!==k}$('pVol').value=Math.round(PVOL*100);$('pMute').textContent=PMUTE?'Unmute':'Mute'}
+function saveAudio(){try{localStorage.setItem('xvidsAudio',JSON.stringify({v:PVOL,m:PMUTE}))}catch(e){}}
+const setVol=v=>{PVOL=Math.min(1,Math.max(0,v));if(PVOL>0)PMUTE=false;applyAudio();saveAudio()};
+function setSrc(k,t){const S=SIDE[k],v=vid(k);if(S.failed||S.meta.missing)return;S.base=S.conv?t:0;$('pErr'+k).textContent='';
+  v.src=`/api/dupes/media?id=${encodeURIComponent(PI.id)}&which=${S.which}`+(S.conv?`&convert=1&start=${t.toFixed(2)}`:'');
+  if(!S.conv&&t>0)v.addEventListener('loadedmetadata',()=>{v.currentTime=t},{once:true});
+  applyAudio();v.playbackRate=+$('pSpeed').value;if(PPLAY)v.play().catch(()=>{})}
+function seekTo(T){T=Math.max(0,PDUR?Math.min(T,PDUR):T);for(const k of ['A','B']){const S=SIDE[k],v=vid(k);if(S.failed||S.meta.missing)continue;
+  if(S.conv||!v.getAttribute('src'))setSrc(k,want(k,T));else v.currentTime=want(k,T)}}
+function setPlaying(p){PPLAY=p;$('pPlay').textContent=p?'Pause':'Play';for(const k of ['A','B']){const v=vid(k);if(!v.getAttribute('src'))continue;p?v.play().catch(()=>{}):v.pause()}}
+function onErr(k){return()=>{const S=SIDE[k],v=vid(k);if(!PI||!v.getAttribute('src'))return;
+  if(!S.conv){S.conv=true;$('pMeta'+k).textContent+=' · not playable natively - converting a preview';setSrc(k,pos(k))}
+  else{S.failed=true;$('pErr'+k).textContent="Can't play this file here (unsupported, or the server is busy converting two other files)."}}}
+function tick(){if(!PI)return;const T=master();if(!PDUR){const d=Math.max(vid('A').duration||0,vid('B').duration||0);if(isFinite(d))PDUR=d}
+  if(!seeking){$('pSeek').value=PDUR?Math.round(1000*T/PDUR):0;$('pTime').textContent=`${fmtT(T)} / ${fmtT(PDUR)}`}
+  if(PPLAY)for(const k of ['A','B']){const S=SIDE[k],v=vid(k);if(S.failed||S.meta.missing||v.seeking||v.readyState<2)continue;const drift=Math.abs(pos(k)-want(k,T));
+    if(k==='B'||SIDE.A.failed){if(!S.conv&&drift>0.4)v.currentTime=want(k,T);else if(S.conv&&drift>4)setSrc(k,want(k,T))}}}
+async function openPlayer(i){const r=dview[i];if(!r||r.other)return;let info;try{info=await api('/api/dupes/info?id='+encodeURIComponent(r.id))}catch(e){alert(e.message);return}
+  if(PI&&PI.id!==info.id)api('/api/dupes/release',{id:PI.id}).catch(()=>{});  // leaving a pair: let go of its files on the share
+  PI=info;PIDX=i;POFF=0;$('pAct').textContent='';$('pKeepA').disabled=$('pKeepB').disabled=$('pBoth').disabled=!!(info.dupe.missing||info.keep.missing);PDUR=Math.max(info.dupe.duration||0,info.keep.duration||0);$('pOff').textContent='0.0 s';setPlaying(false);
+  for(const k of ['A','B']){const S=SIDE[k],m=info[S.which];S.meta=m;S.conv=!m.native;S.failed=false;S.base=0;
+    $('pName'+k).textContent=m.name;$('pName'+k).title=m.where;
+    $('pMeta'+k).textContent=[m.where,m.height?m.height+'p':'',m.codec||'',fmt(m.size),m.duration?fmtT(m.duration):''].filter(Boolean).join(' · ')+(S.conv?' · not playable natively - converting a preview (720p)':'');
+    $('pErr'+k).textContent=m.missing?'This file no longer exists.':'';vid(k).removeAttribute('src');setSrc(k,0)}
+  $('pReason').innerHTML=`<span class="pill ${info.verdict==='CERTAIN'?'ok':'warn'}">${esc(info.verdict)}</span> <span class="mut">${esc(info.reason)}</span>`;
+  const list=dview.map((x,n)=>x.other?-1:n).filter(n=>n>=0);$('pTitle').textContent=`Compare ${list.indexOf(i)+1} of ${list.length}`;
+  $('plPrev').disabled=!list.some(n=>n<i);$('plNext').disabled=!list.some(n=>n>i);$('pMark').checked=dsel.has(info.id);
+  if(!$('pdlg').open)$('pdlg').showModal();clearInterval(PT);PT=setInterval(tick,250);tick()}
+async function navPlayer(d){let j=PIDX+d;while(dview[j]&&dview[j].other)j+=d;if(!dview[j])return false;await openPlayer(j);return true}
+function stopPlayer(){const rid=PI&&PI.id;clearInterval(PT);PT=null;PPLAY=false;PI=null;$('pPlay').textContent='Play';for(const k of ['A','B']){const v=vid(k);v.pause();v.removeAttribute('src');v.load()}if(rid)api('/api/dupes/release',{id:rid}).catch(()=>{})}
+$('drows').addEventListener('click',e=>{if(e.target.closest('input'))return;const tr=e.target.closest('tr[data-i]');if(tr)openPlayer(+tr.dataset.i)});
+for(const k of ['A','B']){vid(k).onerror=onErr(k);vid(k).ondblclick=()=>vid(k).requestFullscreen&&vid(k).requestFullscreen();vid(k).onclick=()=>setPlaying(!PPLAY);
+  vid(k).onended=()=>{if(k==='A'||SIDE.A.failed)setPlaying(false)}}
+$('pPlay').onclick=()=>setPlaying(!PPLAY);$('pBack').onclick=()=>seekTo(master()-10);$('pFwd').onclick=()=>seekTo(master()+10);
+$('pSeek').oninput=()=>{seeking=true;$('pTime').textContent=`${fmtT(PDUR*$('pSeek').value/1000)} / ${fmtT(PDUR)}`};$('pSeek').onchange=()=>{seeking=false;seekTo(PDUR*$('pSeek').value/1000)};
+document.querySelectorAll('#pdlg [data-p]').forEach(b=>b.onclick=()=>seekTo(PDUR*b.dataset.p/100));
+document.querySelectorAll('#pdlg [data-o]').forEach(b=>b.onclick=()=>{const T=master();POFF=Math.round((POFF+ +b.dataset.o)*10)/10;$('pOff').textContent=(POFF>0?'+':'')+POFF.toFixed(1)+' s';seekTo(T)});
+$('pAudio').onchange=applyAudio;$('pVol').oninput=()=>setVol($('pVol').value/100);$('pMute').onclick=()=>{PMUTE=!PMUTE;applyAudio();saveAudio()};$('pSpeed').onchange=()=>{for(const k of ['A','B'])vid(k).playbackRate=+$('pSpeed').value};
+$('plPrev').onclick=()=>navPlayer(-1);$('plNext').onclick=()=>navPlayer(1);$('pClose').onclick=()=>$('pdlg').close();$('pdlg').addEventListener('close',stopPlayer);
+// choose which file to keep: the other one is deleted straight from here (the duplicate takes the kept copy's place if it is the one you keep)
+const dsc=m=>[m.height?m.height+'p':'',m.codec||'',fmt(m.size)].filter(Boolean).join(' · ');
+function askKeep(k){if(!PI)return;const K=SIDE[k].meta,D=SIDE[other(k)].meta;
+  $('kTxt').innerHTML=`Keep <b>${esc(K.name)}</b> <span class="mut">(${esc(dsc(K))})</span><br>and permanently delete <b>${esc(D.name)}</b> <span class="mut">(${esc(dsc(D))})</span>.`
+   +(k==='A'?'<div class="small mut" style="margin-top:10px">The duplicate takes the place of the kept copy in the library (same folder and name). The old kept copy is deleted.</div>':'');
+  $('kdlg').dataset.keep=k;$('kdlg').showModal()}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function waitJob(){for(let i=0;i<900;i++){await sleep(1000);job=await api('/api/job');renderJob();if(!busy())return job}return job}
+$('pKeepA').onclick=()=>askKeep('A');$('pKeepB').onclick=()=>askKeep('B');$('kNo').onclick=()=>$('kdlg').close();
+async function decide(kind,done){  // kind: dupe | keep | both ; done: what to say after it worked
+  if(!PI)return;const id=PI.id,at=PIDX;
+  setPlaying(false);for(const kk of ['A','B']){vid(kk).removeAttribute('src');vid(kk).load()}  // let go of the files so the server can move/delete them
+  $('pAct').className='msg';$('pAct').textContent='Working...';let ok=false,why='';
+  try{await api('/api/dupes/decide',{id,keep:kind});const j=await waitJob();ok=j.status==='done';why=(j.tail||[]).filter(l=>l.includes('FAIL')).pop()||'see the log above'}catch(e){why=e.message}
+  await loadDupes();let n=at;while(dview[n]&&dview[n].other)n++;if(!dview[n]){n=at-1;while(n>=0&&dview[n]&&dview[n].other)n--}
+  if(n>=0&&dview[n]){await openPlayer(n)}else $('pdlg').close();  // decided: on to the next pair (a failed one stays so you can see why)
+  if($('pdlg').open){$('pAct').className='msg '+(ok?'ok':'bad');$('pAct').textContent=ok?done+' Here is the next pair.':`Not done: ${why}`}}
+$('kYes').onclick=()=>{const k=$('kdlg').dataset.keep;$('kdlg').close();decide(k==='A'?'dupe':'keep',`Deleted ${SIDE[other(k)].meta.name}.`)};
+$('pBoth').onclick=()=>decide('both',`Kept both: ${SIDE.A.meta.name} moved to _To Sort.`);
+$('pMark').onchange=()=>{if(!PI)return;const on=$('pMark').checked;on?dsel.add(PI.id):dsel.delete(PI.id);renderDupes();
+  if(on)setTimeout(async()=>{if(await navPlayer(1)&&$('pdlg').open){$('pAct').className='msg ok';$('pAct').textContent='Marked for deletion. Here is the next pair.'}},250)};  // marking is a decision too: on to the next pair
+document.addEventListener('keydown',e=>{if(!$('pdlg').open||$('kdlg').open||e.ctrlKey||e.metaKey||e.altKey)return;const t=e.target,tag=t.tagName,range=tag==='INPUT'&&t.type==='range';
+  if(tag==='SELECT'||(tag==='INPUT'&&!range&&t.type!=='checkbox'))return;
+  if(e.key==='m'||e.key==='M'){PMUTE=!PMUTE;applyAudio();saveAudio()}
+  else if(e.code==='Space'){if(tag==='BUTTON'||tag==='INPUT')return;e.preventDefault();setPlaying(!PPLAY)}  // a focused button/checkbox handles Space itself
+  else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){if(range)return;e.preventDefault();
+    if(e.key==='ArrowLeft')seekTo(master()-5);else if(e.key==='ArrowRight')seekTo(master()+5);else setVol(PVOL+(e.key==='ArrowUp'?0.05:-0.05))}});
+
+// ---------- settings
+const NAMES={smb:'File server (SMB + PowerShell remoting)',stash:'StashDB'};
+async function autoLine(){try{const a=await api('/api/auto'),h=a.history.find(x=>x.kind==='run');
+  $('autoline').textContent='Automatic run: '+(a.settings.enabled?`on, next ${a.next}`:'off')+(h?` · last: ${when(h.t)} - ${h.status!=='done'?h.status:`moved ${h.moved+h.dupes}, deleted ${h.deleted}, ${h.left==null?h.review:h.left} left for review`}`:'')}catch(e){}}
+// ---------- automatic run (Settings page)
+const POL=[['text_matches','Also move files matched only by performer / title / date','Less certain: this is where wrong matches come from.'],
+ ['exact_dupes','Move byte-identical copies of files you already have to _dupes','Nothing is deleted; you delete them yourself on the Duplicates tab.'],
+ ['samples','Delete sample clips of movie rips',''],
+ ['junk','Delete leftover images / nfo / txt files','Only once every video in their folder is handled.'],
+ ['archives','Delete archives (.rar / .zip)','Off by default: they may still contain videos.'],
+ ['unidentified','Move unidentified files to _To Sort','Off by default: they stay in xtosort$ for you to review.']];
+const BROWSER_TZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){return 'UTC'}})();
+let AUTO=null;
+function tzList(){let l=[];try{l=Intl.supportedValuesOf('timeZone')}catch(e){}return l.length?l:['UTC','Europe/Amsterdam','Europe/Stockholm','Europe/London','America/New_York']}
+async function loadAuto(){AUTO=await api('/api/auto');const c=AUTO.settings,d=AUTO.defaults;
+  $('aOn').checked=c.enabled;$('aTime').value=c.time;const tz=(!c.enabled&&c.tz==='UTC')?BROWSER_TZ:c.tz;
+  $('aTz').innerHTML=[...new Set([tz,...tzList()])].map(t=>`<option ${t===tz?'selected':''}>${esc(t)}</option>`).join('');
+  $('aPol').innerHTML=POL.map(([k,t,h])=>`<label class="row small" style="align-items:flex-start;gap:8px;margin:6px 0"><input type="checkbox" data-pol="${k}" ${c.policy[k]?'checked':''}><span>${esc(t)}${h?` <span class="mut">- ${esc(h)}</span>`:''}${c.policy[k]!==d[k]?' <span class="pill warn">changed</span>':''}</span></label>`).join('');
+  $('aLimit').value=c.policy.limit;$('aNext').textContent=c.enabled&&AUTO.next?`Next run: ${AUTO.next}`:'Switched off - nothing runs on its own.';
+  const P=AUTO.preview;$('aPrev').innerHTML=P?`<div class="card" style="margin:14px 0 0"><b>Preview of the plan on the Sort tab</b>
+   <div class="small" style="margin:6px 0">${P.held?`<span class="pill warn">held</span> More files would be handled than the safety limit (${P.limit}), so a real run would do nothing tonight. `:''}<b>${Object.entries(P.counts).filter(([k])=>k.endsWith(':auto')).reduce((a,[,n])=>a+n,0)}</b> files would run automatically${P.auto_deletes?` (+ ${P.auto_deletes} leftover files deleted)`:''}, <b>${P.review_total}</b> stay for review.</div>
+   ${P.review.length?`<div class="tw"><table><thead><tr><th>Stays for review</th><th>Action</th><th>Why</th></tr></thead><tbody>${P.review.slice(0,100).map(r=>`<tr><td class="mono">${esc(r.src)}</td><td>${esc(r.action)}</td><td class="small mut">${esc(r.why)}</td></tr>`).join('')}</tbody></table></div>${P.review_total>100?`<div class="small mut">... and ${P.review_total-100} more - the Sort tab shows them all.</div>`:''}`:''}
+   <div style="margin-top:8px"><button class="b" id="aToSort">Open on the Sort tab</button></div></div>`:'';
+  if($('aToSort'))$('aToSort').onclick=()=>show('sort');
+  const H=AUTO.history;$('aHist').innerHTML=H.length?`<h2 style="margin-top:18px;font-size:15px">Recent automatic runs</h2><div class="tw"><table><thead><tr><th>When</th><th>What</th><th>Result</th><th>Moved</th><th>To _dupes</th><th>Deleted</th><th>Left for review</th></tr></thead><tbody>${H.map(h=>{const pv=h.kind==='preview',cls=h.status!=='done'?'bad':h.held?'warn':'ok',txt=h.status!=='done'?h.status:h.held?'held':'ok';
+   return `<tr><td>${when(h.t)}</td><td>${pv?'preview':h.trigger==='schedule'?'nightly':'manual run'}</td><td><span class="pill ${cls}">${txt}</span>${h.note?`<div class="small mut">${esc(h.note)}</div>`:''}</td>
+    <td>${pv?`<span class="mut">would: ${h.would.moved}</span>`:h.moved}</td><td>${pv?`<span class="mut">would: ${h.would.dupes}</span>`:h.dupes}</td><td>${pv?'-':h.deleted}</td><td>${pv?h.review:(h.left==null?h.review:h.left)}</td></tr>`}).join('')}</tbody></table></div>`:''}
+async function saveAuto(quiet){const policy={limit:+$('aLimit').value};document.querySelectorAll('#aPol input[data-pol]').forEach(i=>policy[i.dataset.pol]=i.checked);
+  try{AUTO=await api('/api/auto/settings',{enabled:$('aOn').checked,time:$('aTime').value,tz:$('aTz').value,policy});if(!quiet){$('aMsg').className='msg ok';$('aMsg').textContent='Saved.'}await loadAuto();return true}
+  catch(e){$('aMsg').className='msg bad';$('aMsg').textContent=e.message;return false}}
+$('aSave').onclick=()=>saveAuto(false);
+$('aPreview').onclick=async()=>{if(await saveAuto(true))run('/api/auto/run',{preview:true})};
+$('aRun').onclick=()=>$('adlg').showModal();$('aNo').onclick=()=>$('adlg').close();
+$('aYes').onclick=async()=>{$('adlg').close();if(await saveAuto(true))run('/api/auto/run',{preview:false})};
+async function loadSettings(){loadBannerCard().catch(()=>{});loadAuto().catch(e=>{$('aMsg').className='msg bad';$('aMsg').textContent=e.message});fetch('/api/status').then(r=>r.json()).then(j=>{$('conn').innerHTML=Object.entries(j).map(([k,v])=>`<div class="row" style="margin:8px 0"><span class="dot" style="background:var(--${v.ok?'ok':'bad'})"></span><div class="grow"><b>${esc(k)}</b> <span class="mut">(${v.ms} ms)</span><div class="mut small">${esc(v.detail)}</div></div></div>`).join('')}).catch(e=>{$('conn').textContent='Failed to load status: '+e});
+  const j=await api('/api/settings');$('creds').innerHTML=Object.entries(j).map(([k,v])=>`<form class="row" data-k="${k}" style="margin:10px 0"><b style="flex:0 0 100%">${NAMES[k]}</b>
+   <input name="username" value="${esc(v.username)}" placeholder="username" autocomplete="off" class="grow"><input name="password" type="password" placeholder="${v.configured?'new password':'password'}" autocomplete="new-password" required class="grow"><button class="p">Save</button><div class="msg" style="flex:0 0 100%"></div></form>`).join('');
+  document.querySelectorAll('#creds form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('button'),m=f.querySelector('.msg');b.disabled=true;m.className='msg';m.textContent='Testing…';
+   try{const r=await api('/api/settings/'+f.dataset.k,{username:f.username.value,password:f.password.value});m.className='msg ok';m.textContent=r.detail;f.password.value='';fetch('/api/status').then(r=>r.json()).then(j=>{$('conn').innerHTML=Object.entries(j).map(([k,v])=>`<div class="row" style="margin:8px 0"><span class="dot" style="background:var(--${v.ok?'ok':'bad'})"></span><div class="grow"><b>${esc(k)}</b> <span class="mut">(${v.ms} ms)</span><div class="mut small">${esc(v.detail)}</div></div></div>`).join('')})}catch(x){m.className='msg bad';m.textContent=x.message}b.disabled=false})}
+
+// ---------- header banner
+let BN={items:[],i:0,timer:null,paused:false};
+async function loadBanner(){let o;try{o=await api('/api/banner')}catch(e){return}
+  clearInterval(BN.timer);const b=$('banner'),items=o.items.filter(x=>x.imgs.length);
+  if(!o.config.enabled||!items.length){b.hidden=true;document.querySelector('header').classList.remove('has-banner');if(o.config.enabled&&o.status.running)setTimeout(loadBanner,4000);return}
+  BN.items=items.map(x=>({...x,n:0}));
+  b.querySelector('.bslides').innerHTML=BN.items.map(it=>`<div class="bslide"><img alt="" decoding="async"><div class="bshade"></div><div class="btext"><div class="bname">${esc(it.name)}</div><div class="bline"></div>${it.videos!=null?`<div class="bsub">${it.videos} video${it.videos===1?'':'s'} in your library</div>`:''}</div></div>`).join('');
+  b.querySelector('.bdots').innerHTML=BN.items.map((_,k)=>`<i data-k="${k}"></i>`).join('');
+  b.hidden=false;document.querySelector('header').classList.add('has-banner');showSlide(Math.floor(Math.random()*BN.items.length));
+  BN.timer=setInterval(()=>{if(!BN.paused)showSlide((BN.i+1)%BN.items.length)},o.config.seconds*1000)}
+function focus(sl,img,f){   // put the face in the middle of the visible band (the crop is very wide) and put the name on the side that keeps clear of it
+  const b=$('banner'),cw=b.clientWidth,ch=b.clientHeight,nw=img.naturalWidth,nh=img.naturalHeight;if(!nw||!nh)return;
+  const fy=f?f[1]:0.32,fx=f?f[0]:0.65,fh=f?f[2]:0.2,sc=Math.max(cw/nw,ch/nh),sw=nw*sc,sh=nh*sc;
+  const y=sh>ch?Math.min(0,Math.max(ch-sh,ch*0.56-fy*sh))/(ch-sh):0.5,x=sw>cw?Math.min(0,Math.max(cw-sw,cw*(fx<0.5?0.7:0.3)-fx*sw))/(cw-sw):0.5;
+  img.style.objectPosition=`${(x*100).toFixed(1)}% ${(y*100).toFixed(1)}%`;
+  const fcx=(sw>cw?x*(cw-sw):0)+fx*sw,fpx=fh*sh,l=fcx-fpx*0.4,r=fcx+fpx*0.4,txt=Math.min(380,cw*0.4);   // which side is free for the name?
+  const leftHit=l<txt,rightHit=r>cw-txt,right=leftHit&&!rightHit?true:rightHit&&!leftHit?false:fx<0.45;
+  sl.classList.toggle('right',right);if(sl.classList.contains('on'))b.classList.toggle('right',right)}
+function showSlide(k){const it=BN.items[k],sl=$('banner').querySelectorAll('.bslide'),img=sl[k].querySelector('img'),p=it.imgs[it.n%it.imgs.length];it.n++;   // a different picture of the same performer each time round
+  if(img.getAttribute('src')!==p.u){img.onload=()=>focus(sl[k],img,p.face);img.src=p.u}else focus(sl[k],img,p.face);
+  sl.forEach((s,j)=>s.classList.toggle('on',j===k));$('banner').querySelectorAll('.bdots i').forEach((d,j)=>d.classList.toggle('on',j===k));BN.i=k;$('banner').classList.toggle('right',sl[k].classList.contains('right'));
+  const nx=BN.items[(k+1)%BN.items.length];new Image().src=nx.imgs[nx.n%nx.imgs.length].u}   // warm up the next one
+$('banner').onmouseenter=()=>BN.paused=true;$('banner').onmouseleave=()=>BN.paused=false;
+$('banner').onclick=e=>{const d=e.target.closest('i[data-k]');if(d)showSlide(+d.dataset.k)};
+async function loadBannerCard(){const o=await api('/api/banner'),c=o.config;$('bnOn').checked=c.enabled;$('bnSec').value=String(c.seconds);$('bnSrc').value=c.source;
+  if(document.activeElement!==$('bnNames'))$('bnNames').value=c.names.join('\n');
+  const ready=o.items.filter(x=>x.imgs.length).length;
+  $('bnStat').textContent=o.status.running?`Fetching pictures... ${o.status.done}/${o.status.total}`:`${ready} of ${o.items.length} performers have pictures`+(o.status.checked?` (${o.status.kept} of ${o.status.checked} examined pictures show a clear face)`:'')+'.'+(o.status.errors.length?' Problems: '+o.status.errors.join('; '):'');return o}
+async function pollBanner(){for(let i=0;i<180;i++){const o=await loadBannerCard();if(!o.status.running)break;await sleep(2000)}loadBanner();$('bnMsg').textContent=''}
+$('bnSave').onclick=async()=>{try{await api('/api/banner/settings',{enabled:$('bnOn').checked,names:$('bnNames').value.split('\n'),seconds:+$('bnSec').value,source:$('bnSrc').value});$('bnMsg').className='msg ok';$('bnMsg').textContent='Saved - fetching pictures...';pollBanner()}catch(e){$('bnMsg').className='msg bad';$('bnMsg').textContent=e.message}};
+$('bnAgain').onclick=async()=>{try{await api('/api/banner/refresh',{});$('bnMsg').className='msg ok';$('bnMsg').textContent='Fetching new pictures...';pollBanner()}catch(e){$('bnMsg').className='msg bad';$('bnMsg').textContent=e.message}};
+loadBanner();pollJob();show('sort');
+</script></main></body></html>
