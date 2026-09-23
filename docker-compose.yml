@@ -1,12 +1,16 @@
 # Everything under "storage backend" can also be left at these placeholder values here and set later from the
 # app's own Settings > Library page instead (saved into the /data volume, so it survives redeploys and does not
 # need docker compose up again) - whichever you find more convenient. Pick ONE of the two backends below.
+#
+# The image is published at ghcr.io/greetoz/video-sorter, so `docker compose up -d` alone (no source checkout,
+# no --build) pulls and runs it. Keep the build: block below if you'd rather build your own from source instead
+# (docker compose up -d --build) - either way the image gets the same name once built/pulled.
 services:
   video-sorter:
     build:
       context: .
       dockerfile: app/Dockerfile
-    image: video-sorter:latest
+    image: ghcr.io/greetoz/video-sorter:latest
     restart: unless-stopped
     ports:
       - "8770:8000"

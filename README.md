@@ -101,12 +101,17 @@ filesystem if you want every move to be an instant rename.
 
 ## Quick start
 
+The image is published at `ghcr.io/greetoz/video-sorter`, so you only need `docker-compose.yml`
+itself (this repo is private, so grab a copy of that one file from someone who has access, rather
+than cloning) - no local build required:
+
 ```bash
-git clone <this repo> video-sorter && cd video-sorter
-cp docker-compose.yml docker-compose.yml.bak  # optional, before you edit it
 $EDITOR docker-compose.yml   # set UI_PASSWORD and one of the two storage backend blocks
-docker compose up -d --build
+docker compose up -d         # pulls the published image
 ```
+
+If you do have the full source checked out and would rather build your own image instead of
+pulling the published one, `docker compose up -d --build` there does that.
 
 Then open `http://<host>:8770`, log in with `UI_PASSWORD`, and go to **Settings**:
 
